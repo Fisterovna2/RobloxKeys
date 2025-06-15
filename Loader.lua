@@ -25,7 +25,10 @@ local function SecurityCheck()
     return true
 end
 
-if not SecurityCheck() then return end
+if not SecurityCheck() then 
+    warn("Security check failed. Stopping script.")
+    return 
+end
 
 local function GetToken()
     local parts = {
@@ -55,8 +58,15 @@ local GamesTables = {
 
 local function SafeHttpGet(url)
     local success, result = pcall(function()
-        return game:HttpGetAsync(url, true)
+        return game:HttpGet(url, true)
     end)
+    
+    if not success then
+        success, result = pcall(function()
+            return game:HttpGetAsync(url, true)
+        end)
+    end
+    
     return success and result or nil
 end
 
@@ -85,12 +95,20 @@ local function SendToGitHub(key)
     
     local json = game:GetService("HttpService"):JSONEncode(data)
     
-    local response = request({
-        Url = url,
-        Method = "POST",
-        Headers = headers,
-        Body = json
-    })
+    local response
+    local success, err = pcall(function()
+        response = request({
+            Url = url,
+            Method = "POST",
+            Headers = headers,
+            Body = json
+        })
+    end)
+    
+    if not success then
+        warn("GitHub request failed: "..tostring(err))
+        return false
+    end
     
     if response and response.StatusCode == 201 then
         print("Ключ отправлен в GitHub Issues!")
@@ -98,6 +116,9 @@ local function SendToGitHub(key)
     else
         local status = response and response.StatusCode or "no response"
         warn("Ошибка отправки: "..tostring(status))
+        if response and response.Body then
+            warn("Response body: "..tostring(response.Body))
+        end
         return false
     end
 end
@@ -107,7 +128,8 @@ local function ExtractKey(script)
         'Key%s*=%s*["\']([^"\']+)["\']',
         'key%s*=%s*["\']([^"\']+)["\']',
         'KEY%s*=%s*["\']([^"\']+)["\']',
-        'password%s*=%s*["\']([^"\']+)["\']'
+        'password%s*=%s*["\']([^"\']+)["\']',
+        'getgenv%(%)._key%s*=%s*["\']([^"\']+)["\']'
     }
     
     for _, pattern in ipairs(patterns) do
@@ -122,18 +144,21 @@ local function ExecuteGameScript(scriptContent)
         local ran, execErr = pcall(func)
         if ran then
             print("Скрипт успешно выполнен!")
+            return true
         else
             warn("Ошибка выполнения: "..tostring(execErr))
         end
     else
         warn("Ошибка компиляции: "..tostring(err))
     end
+    return false
 end
 
 local function MainLoader()
     print("="..string.rep("=", 40))
-    print(" Quantum X Loader v3.0 | Secure Edition")
+    print(" Quantum X Loader v3.5 | Xeno Fix")
     print("="..string.rep("=", 40))
+    print("Идентификатор игры: "..tostring(game.PlaceId))
     
     local gameData = GamesTables[game.PlaceId]
     if not gameData then
@@ -150,6 +175,7 @@ local function MainLoader()
         warn("Ошибка загрузки скрипта")
         return
     end
+    print("Размер скрипта: "..#scriptContent.." байт")
     
     local key = ExtractKey(scriptContent)
     if not key then
@@ -165,12 +191,29 @@ local function MainLoader()
         end
     end
     
-    ExecuteGameScript(scriptContent)
+    if not ExecuteGameScript(scriptContent) then
+        warn("Попытка альтернативного запуска...")
+        loadstring(scriptContent)()
+    end
     
     print("="..string.rep("=", 40))
     print(" Quantum X Loader завершил работу")
     print("="..string.rep("=", 40))
 end
+
+local function HandleCacheError()
+    if not isfolder then return end
+    if not makefolder then return end
+    
+    pcall(function()
+        if not isfolder("xeno_cache_fix") then
+            makefolder("xeno_cache_fix")
+        end
+        writefile("xeno_cache_fix/timestamp.txt", tostring(os.time()))
+    end)
+end
+
+HandleCacheError()
 
 local success, err = pcall(MainLoader)
 if not success then
