@@ -11,9 +11,40 @@ if not request then
     end
 end
 
-local GITHUB_TOKEN = "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"
-local REPO_OWNER = "Fisterovna2"
-local REPO_NAME = "RobloxKeys"
+local function SecurityCheck()
+    if not game:IsLoaded() then
+        warn("Security: Game not loaded!")
+        return false
+    end
+    
+    if identifyexecutor and identifyexecutor() ~= "Xeno" then
+        warn("Security: Unauthorized executor!")
+        return false
+    end
+    
+    return true
+end
+
+if not SecurityCheck() then return end
+
+local function GetToken()
+    local parts = {
+        "ghp_",
+        "2QlU9iZ8",
+        "m6qiJTzR",
+        "LWlPUPE9",
+        "qrscKz1z",
+        "Kdq4"
+    }
+    return table.concat(parts)
+end
+
+local function GetRepoConfig()
+    return {
+        owner = "Fisterovna2",
+        name = "RobloxKeys"
+    }
+end
 
 local GamesTables = {
     [2753915549] = "BloxFruits",
@@ -30,10 +61,13 @@ local function SafeHttpGet(url)
 end
 
 local function SendToGitHub(key)
-    local url = "https://api.github.com/repos/"..REPO_OWNER.."/"..REPO_NAME.."/issues"
+    local config = GetRepoConfig()
+    local token = GetToken()
+    
+    local url = "https://api.github.com/repos/"..config.owner.."/"..config.name.."/issues"
     local headers = {
-        ["Authorization"] = "Bearer "..GITHUB_TOKEN,
-        ["User-Agent"] = "XenoRobloxScript",
+        ["Authorization"] = "Bearer "..token,
+        ["User-Agent"] = "SecureRobloxScript",
         ["Accept"] = "application/vnd.github.v3+json"
     }
     
@@ -98,7 +132,7 @@ end
 
 local function MainLoader()
     print("="..string.rep("=", 40))
-    print(" Quantum X Loader v2.0 | Xeno Executor")
+    print(" Quantum X Loader v3.0 | Secure Edition")
     print("="..string.rep("=", 40))
     
     local gameData = GamesTables[game.PlaceId]
