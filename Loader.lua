@@ -143,10 +143,22 @@ local function createActivationGui()
     activateBtn.ZIndex = 11
     activateBtn.Parent = frame
     
+    -- Кнопка "Продолжить без активации"
+    local skipBtn = Instance.new("TextButton")
+    skipBtn.Text = "ПРОДОЛЖИТЬ БЕЗ АКТИВАЦИИ"
+    skipBtn.Size = UDim2.new(1, -20, 0, 40)
+    skipBtn.Position = UDim2.new(0, 10, 0, 200)
+    skipBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+    skipBtn.TextColor3 = Color3.white
+    skipBtn.Font = Enum.Font.Gotham
+    skipBtn.TextSize = 14
+    skipBtn.ZIndex = 11
+    skipBtn.Parent = frame
+    
     -- Метка статуса
     local statusLabel = Instance.new("TextLabel")
     statusLabel.Size = UDim2.new(1, -20, 0, 30)
-    statusLabel.Position = UDim2.new(0, 10, 0, 200)
+    statusLabel.Position = UDim2.new(0, 10, 0, 250)
     statusLabel.BackgroundTransparency = 1
     statusLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
     statusLabel.Font = Enum.Font.Gotham
@@ -174,6 +186,13 @@ local function createActivationGui()
             statusLabel.Text = "НЕВЕРНЫЙ КЛЮЧ! Попробуйте снова."
             statusLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
         end
+    end)
+    
+    -- Обработчик пропуска активации
+    skipBtn.MouseButton1Click:Connect(function()
+        activationGui:Destroy()
+        activationGui = nil
+        createFarmingMenu()
     end)
     
     return activationGui
@@ -302,12 +321,6 @@ if keySent then
         Icon = "rbxassetid://6726578090",
         Duration = 5
     })
-    
-    -- Сообщение в чат с инструкцией
-    game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents.SayMessageRequest:FireServer(
-        "Нажмите M для ввода ключа активации",
-        "All"
-    )
     
     -- Автоматическое открытие окна активации через 3 секунды
     task.wait(3)
