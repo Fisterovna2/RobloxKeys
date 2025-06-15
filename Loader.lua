@@ -64,9 +64,9 @@ local accessKey = generateAccessKey()
 local keySent = sendKeyToDiscord(accessKey)
 local activated = false
 local activationGui = nil
-local keyInputFrame = nil
+local farmingGui = nil
 
--- Функции фарма (заглушки)
+-- Функции фарма (состояния)
 local farmingModules = {
     mastery = false,
     fruits = false,
@@ -118,7 +118,7 @@ local function createActivationGui()
     infoLabel.ZIndex = 11
     infoLabel.Parent = frame
     
-    -- ПОЛЕ ДЛЯ ВВОДА КЛЮЧА
+    -- Поле для ввода ключа
     local keyBox = Instance.new("TextBox")
     keyBox.Name = "KeyInputBox"
     keyBox.Size = UDim2.new(1, -20, 0, 40)
@@ -162,19 +162,14 @@ local function createActivationGui()
         
         if inputKey == validKey then
             activated = true
-            statusLabel.Text = "Активация успешна! Доступ открыт."
+            statusLabel.Text = "Активация успешна! Открываем меню через 3 секунды..."
             statusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
             
-            -- Уведомление об успешной активации
-            game.StarterGui:SetCore("SendNotification", {
-                Title = "АКТИВАЦИЯ",
-                Text = "Система успешно активирована!",
-                Duration = 5
-            })
-            
-            task.wait(2)
+            -- Автоматическое продолжение через 3 секунды
+            task.wait(3)
             activationGui:Destroy()
             activationGui = nil
+            createFarmingMenu()
         else
             statusLabel.Text = "НЕВЕРНЫЙ КЛЮЧ! Попробуйте снова."
             statusLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
@@ -184,10 +179,119 @@ local function createActivationGui()
     return activationGui
 end
 
--- Функция для создания/управления меню фарма (заглушка)
+-- Создаем меню фарма
 local function createFarmingMenu()
-    -- Здесь будет реализация меню фарма
-    print("Функции фарма активированы!")
+    if farmingGui then farmingGui:Destroy() end
+    
+    farmingGui = Instance.new("ScreenGui")
+    farmingGui.Name = "FarmingMenuGUI"
+    farmingGui.Parent = game:GetService("CoreGui")
+    farmingGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    -- Основной фрейм
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 400, 0, 450)
+    frame.Position = UDim2.new(0.5, -200, 0.5, -225)
+    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    frame.BorderSizePixel = 0
+    frame.Active = true
+    frame.Draggable = true
+    frame.ZIndex = 10
+    frame.Parent = farmingGui
+    
+    -- Заголовок
+    local title = Instance.new("TextLabel")
+    title.Text = "FARMING SYSTEM"
+    title.Size = UDim2.new(1, 0, 0, 40)
+    title.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    title.TextColor3 = Color3.fromRGB(0, 200, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 20
+    title.ZIndex = 11
+    title.Parent = frame
+    
+    -- Список функций
+    local features = {
+        {name = "Фарм мастери", key = "mastery", color = Color3.fromRGB(0, 170, 255)},
+        {name = "Фарм фруктов", key = "fruits", color = Color3.fromRGB(255, 85, 0)},
+        {name = "Фарм сундуков", key = "chests", color = Color3.fromRGB(255, 255, 0)},
+        {name = "Фарм костей", key = "bones", color = Color3.fromRGB(170, 0, 255)}
+    }
+    
+    -- Создаем переключатели для функций
+    for i, feature in ipairs(features) do
+        -- Контейнер для функции
+        local container = Instance.new("Frame")
+        container.Size = UDim2.new(1, -20, 0, 80)
+        container.Position = UDim2.new(0, 10, 0, 50 + (i-1)*90)
+        container.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+        container.BackgroundTransparency = 0.5
+        container.ZIndex = 11
+        container.Parent = frame
+        
+        -- Название функции
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Text = feature.name
+        nameLabel.Size = UDim2.new(0.7, 0, 1, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = 16
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        nameLabel.PaddingLeft = UDim.new(0, 10)
+        nameLabel.ZIndex = 12
+        nameLabel.Parent = container
+        
+        -- Переключатель
+        local toggle = Instance.new("TextButton")
+        toggle.Text = farmingModules[feature.key] and "ВКЛ" or "ВЫКЛ"
+        toggle.Size = UDim2.new(0.25, 0, 0.6, 0)
+        toggle.Position = UDim2.new(0.7, 0, 0.2, 0)
+        toggle.BackgroundColor3 = farmingModules[feature.key] and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+        toggle.TextColor3 = Color3.white
+        toggle.Font = Enum.Font.GothamBold
+        toggle.TextSize = 14
+        toggle.ZIndex = 12
+        toggle.Parent = container
+        
+        -- Обработчик переключения
+        toggle.MouseButton1Click:Connect(function()
+            farmingModules[feature.key] = not farmingModules[feature.key]
+            toggle.Text = farmingModules[feature.key] and "ВКЛ" or "ВЫКЛ"
+            toggle.BackgroundColor3 = farmingModules[feature.key] and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+            
+            -- Здесь будет код активации/деактивации функции
+            print(feature.name .. " " .. (farmingModules[feature.key] and "активирован" or "деактивирован"))
+        end)
+        
+        -- Иконка функции
+        local icon = Instance.new("ImageLabel")
+        icon.Size = UDim2.new(0, 50, 0, 50)
+        icon.Position = UDim2.new(0.05, 0, 0.15, 0)
+        icon.BackgroundTransparency = 1
+        icon.Image = "rbxassetid://" .. (farmingModules[feature.key] and "11327078478" or "11327078784")
+        icon.ZIndex = 12
+        icon.Parent = container
+    end
+    
+    -- Кнопка закрытия
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Text = "ЗАКРЫТЬ (M)"
+    closeBtn.Size = UDim2.new(1, -20, 0, 40)
+    closeBtn.Position = UDim2.new(0, 10, 0, 380)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+    closeBtn.TextColor3 = Color3.white
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 16
+    closeBtn.ZIndex = 11
+    closeBtn.Parent = frame
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        farmingGui:Destroy()
+        farmingGui = nil
+    end)
+    
+    return farmingGui
 end
 
 -- Уведомление о ключе
@@ -204,6 +308,10 @@ if keySent then
         "Нажмите M для ввода ключа активации",
         "All"
     )
+    
+    -- Автоматическое открытие окна активации через 3 секунды
+    task.wait(3)
+    createActivationGui()
 else
     warn("Не удалось отправить ключ в Discord")
     game.StarterGui:SetCore("SendNotification", {
@@ -214,20 +322,23 @@ else
     })
 end
 
--- Обработчик клавиши M для управления активацией
+-- Обработчик клавиши M для управления интерфейсами
 game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.M and not gameProcessed then
-        if activated then
-            -- Если активировано, создаем меню фарма
+        -- Управление окном активации
+        if activationGui and activationGui.Parent then
+            activationGui:Destroy()
+            activationGui = nil
+        -- Управление меню фарма
+        elseif farmingGui and farmingGui.Parent then
+            farmingGui:Destroy()
+            farmingGui = nil
+        -- Открытие меню фарма если активировано
+        elseif activated then
             createFarmingMenu()
-        else
-            -- Переключение окна активации
-            if activationGui and activationGui.Parent then
-                activationGui:Destroy()
-                activationGui = nil
-            else
-                activationGui = createActivationGui()
-            end
+        -- Открытие активации если не активировано
+        elseif not activated then
+            createActivationGui()
         end
     end
 end)
@@ -243,5 +354,5 @@ spawn(function()
     end
 end)
 
-print("Система запущена. Нажмите M для ввода ключа.")
+print("Система запущена. Нажмите M для управления.")
 print("Сгенерированный ключ: " .. accessKey)
