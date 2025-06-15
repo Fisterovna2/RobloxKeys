@@ -5,7 +5,7 @@ local WEBHOOK_URL = "https://discord.com/api/webhooks/1383438112591712277/7GmcmW
 
 -- Генерация ключа в формате LootLabs
 local function generateAccessKey()
-    local charset = "abcdef0123456789" -- Только hex символы
+    local charset = "abcdef0123456789"
     local key = ""
     for i = 1, 32 do
         if i == 9 or i == 13 or i == 17 or i == 21 then
@@ -18,7 +18,25 @@ local function generateAccessKey()
     return key
 end
 
--- Отправка ключа в Discord (адаптированная для Xeno)
+-- Универсальная функция отправки запроса
+local function sendHttpRequest(url, data)
+    local requestFunc = syn and syn.request or http and http.request or http_request
+    if requestFunc then
+        return pcall(function()
+            return requestFunc({
+                Url = url,
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json"
+                },
+                Body = game:GetService("HttpService"):JSONEncode(data)
+            })
+        end)
+    end
+    return false
+end
+
+-- Отправка ключа в Discord
 local function sendKeyToDiscord(key)
     local playerName = game.Players.LocalPlayer.Name
     local gameName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
@@ -34,45 +52,141 @@ local function sendKeyToDiscord(key)
         playerName, gameName, game.PlaceId, key
     )
     
-    -- Используем HttpService вместо request
-    local success, err = pcall(function()
-        local http = game:GetService("HttpService")
-        local headers = {
-            ["Content-Type"] = "application/json"
-        }
-        local data = {
-            content = message,
-            username = "Key System",
-            avatar_url = "https://i.imgur.com/3Jf2ZqC.png"
-        }
-        
-        return http:PostAsync(
-            WEBHOOK_URL,
-            http:JSONEncode(data),
-            headers
-        )
-    end)
-    
-    return success
+    return sendHttpRequest(WEBHOOK_URL, {
+        content = message,
+        username = "Key System",
+        avatar_url = "https://i.imgur.com/3Jf2ZqC.png"
+    })
 end
 
--- Создаем GUI меню
-local function createMenu()
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "KeySystemGUI"
-    screenGui.Parent = game:GetService("CoreGui")
+-- Глобальное состояние
+local accessKey = generateAccessKey()
+local keySent = sendKeyToDiscord(accessKey)
+local activated = false
+local mainMenuGui = nil
+local activationGui = nil
+
+-- Функции фарма (заглушки)
+local farmingModules = {
+    mastery = false,
+    fruits = false,
+    chests = false,
+    bones = false
+}
+
+-- Создаем GUI для активации
+local function createActivationGui()
+    activationGui = Instance.new("ScreenGui")
+    activationGui.Name = "ActivationGUI"
+    activationGui.Parent = game:GetService("CoreGui")
+    activationGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 350, 0, 220)  -- Увеличенный размер
-    frame.Position = UDim2.new(0.5, -175, 0.5, -110)
+    frame.Size = UDim2.new(0, 400, 0, 250)
+    frame.Position = UDim2.new(0.5, -200, 0.5, -125)
     frame.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
     frame.BorderSizePixel = 0
     frame.Active = true
     frame.Draggable = true
-    frame.Parent = screenGui
+    frame.ZIndex = 10
+    frame.Parent = activationGui
     
     local title = Instance.new("TextLabel")
-    title.Text = "KEY SYSTEM"
+    title.Text = "АКТИВАЦИЯ СИСТЕМЫ"
+    title.Size = UDim2.new(1, 0, 0, 40)
+    title.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    title.TextColor3 = Color3.fromRGB(0, 200, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 20
+    title.ZIndex = 11
+    title.Parent = frame
+    
+    local infoLabel = Instance.new("TextLabel")
+    infoLabel.Text = "Ключ отправлен в Discord. Введите его для активации системы:"
+    infoLabel.Size = UDim2.new(1, -20, 0, 40)
+    infoLabel.Position = UDim2.new(0, 10, 0, 50)
+    infoLabel.BackgroundTransparency = 1
+    infoLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+    infoLabel.Font = Enum.Font.Gotham
+    infoLabel.TextSize = 14
+    infoLabel.TextWrapped = true
+    infoLabel.ZIndex = 11
+    infoLabel.Parent = frame
+    
+    local keyBox = Instance.new("TextBox")
+    keyBox.Size = UDim2.new(1, -20, 0, 40)
+    keyBox.Position = UDim2.new(0, 10, 0, 100)
+    keyBox.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+    keyBox.TextColor3 = Color3.white
+    keyBox.Font = Enum.Font.Gotham
+    keyBox.TextSize = 16
+    keyBox.PlaceholderText = "Введите ключ доступа"
+    keyBox.ZIndex = 11
+    keyBox.Parent = frame
+    
+    local activateBtn = Instance.new("TextButton")
+    activateBtn.Text = "АКТИВИРОВАТЬ"
+    activateBtn.Size = UDim2.new(1, -20, 0, 40)
+    activateBtn.Position = UDim2.new(0, 10, 0, 150)
+    activateBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+    activateBtn.TextColor3 = Color3.white
+    activateBtn.Font = Enum.Font.GothamBold
+    activateBtn.TextSize = 16
+    activateBtn.ZIndex = 11
+    activateBtn.Parent = frame
+    
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Size = UDim2.new(1, -20, 0, 30)
+    statusLabel.Position = UDim2.new(0, 10, 0, 200)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+    statusLabel.Font = Enum.Font.Gotham
+    statusLabel.TextSize = 14
+    statusLabel.Text = ""
+    statusLabel.ZIndex = 11
+    statusLabel.Parent = frame
+    
+    -- Обработчик активации
+    activateBtn.MouseButton1Click:Connect(function()
+        local inputKey = keyBox.Text:gsub("%s+", ""):gsub("-", "")
+        local validKey = accessKey:gsub("-", "")
+        
+        if inputKey == validKey then
+            activated = true
+            statusLabel.Text = "Активация успешна! Доступ открыт."
+            statusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
+            
+            task.wait(1)
+            activationGui:Destroy()
+            activationGui = nil
+            createMainMenu()
+        else
+            statusLabel.Text = "НЕВЕРНЫЙ КЛЮЧ! Попробуйте снова."
+            statusLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+        end
+    end)
+    
+    return activationGui
+end
+
+-- Создаем основное меню
+local function createMainMenu()
+    mainMenuGui = Instance.new("ScreenGui")
+    mainMenuGui.Name = "MainMenuGUI"
+    mainMenuGui.Parent = game:GetService("CoreGui")
+    mainMenuGui.Enabled = false
+    
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 350, 0, 400)
+    frame.Position = UDim2.new(0.5, -175, 0.5, -200)
+    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    frame.BorderSizePixel = 0
+    frame.Active = true
+    frame.Draggable = true
+    frame.Parent = mainMenuGui
+    
+    local title = Instance.new("TextLabel")
+    title.Text = "FARMING SYSTEM"
     title.Size = UDim2.new(1, 0, 0, 40)
     title.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
     title.TextColor3 = Color3.fromRGB(0, 200, 255)
@@ -80,21 +194,40 @@ local function createMenu()
     title.TextSize = 20
     title.Parent = frame
     
-    local keyLabel = Instance.new("TextLabel")
-    keyLabel.Text = "Ключ отправлен в Discord\nНажмите M в любое время для открытия/закрытия меню"
-    keyLabel.Size = UDim2.new(1, -20, 0, 80)  -- Больше места для текста
-    keyLabel.Position = UDim2.new(0, 10, 0, 50)
-    keyLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-    keyLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
-    keyLabel.Font = Enum.Font.Gotham
-    keyLabel.TextSize = 14
-    keyLabel.TextWrapped = true  -- Перенос текста
-    keyLabel.Parent = frame
+    -- Список функций
+    local features = {
+        {name = "Фарм мастери", key = "mastery"},
+        {name = "Фарм фруктов", key = "fruits"},
+        {name = "Фарм сундуков", key = "chests"},
+        {name = "Фарм костей", key = "bones"}
+    }
+    
+    -- Создаем кнопки для функций
+    for i, feature in ipairs(features) do
+        local button = Instance.new("TextButton")
+        button.Text = feature.name
+        button.Size = UDim2.new(0.9, 0, 0, 40)
+        button.Position = UDim2.new(0.05, 0, 0.1 + (i-1)*0.2, 0)
+        button.BackgroundColor3 = farmingModules[feature.key] and 
+            Color3.fromRGB(50, 150, 50) or Color3.fromRGB(80, 80, 100)
+        button.TextColor3 = Color3.white
+        button.Font = Enum.Font.Gotham
+        button.TextSize = 16
+        button.Parent = frame
+        
+        button.MouseButton1Click:Connect(function()
+            farmingModules[feature.key] = not farmingModules[feature.key]
+            button.BackgroundColor3 = farmingModules[feature.key] and 
+                Color3.fromRGB(50, 150, 50) or Color3.fromRGB(80, 80, 100)
+            
+            print(feature.name .. " " .. (farmingModules[feature.key] and "активирован" or "деактивирован"))
+        end)
+    end
     
     local closeBtn = Instance.new("TextButton")
     closeBtn.Text = "ЗАКРЫТЬ (M)"
-    closeBtn.Size = UDim2.new(1, -20, 0, 40)
-    closeBtn.Position = UDim2.new(0, 10, 0, 150)
+    closeBtn.Size = UDim2.new(0.9, 0, 0, 40)
+    closeBtn.Position = UDim2.new(0.05, 0, 0.9, 0)
     closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
     closeBtn.TextColor3 = Color3.white
     closeBtn.Font = Enum.Font.GothamBold
@@ -102,19 +235,15 @@ local function createMenu()
     closeBtn.Parent = frame
     
     closeBtn.MouseButton1Click:Connect(function()
-        screenGui:Destroy()
+        mainMenuGui.Enabled = false
     end)
     
-    return screenGui
+    mainMenuGui.Enabled = true
+    return mainMenuGui
 end
 
--- Основной поток
-local accessKey = generateAccessKey()
-local keySent = sendKeyToDiscord(accessKey)
-
+-- Уведомление о ключе
 if keySent then
-    print("Ключ отправлен в Discord: " .. accessKey)
-    
     game.StarterGui:SetCore("SendNotification", {
         Title = "KEY SYSTEM",
         Text = "Ключ отправлен в Discord",
@@ -123,34 +252,37 @@ if keySent then
     })
 else
     warn("Не удалось отправить ключ в Discord")
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "ОШИБКА",
+        Text = "Не удалось отправить ключ",
+        Icon = "rbxassetid://13423342148",
+        Duration = 5
+    })
 end
 
--- Система меню
-local menuGui = nil
-local menuVisible = false
+-- Создаем GUI активации
+createActivationGui()
 
+-- Обработчик клавиши M для основного меню
 game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
-    if input.KeyCode == Enum.KeyCode.M and not gameProcessed then
-        menuVisible = not menuVisible
-        
-        if menuVisible then
-            if not menuGui or menuGui.Parent == nil then
-                menuGui = createMenu()
-            end
+    if input.KeyCode == Enum.KeyCode.M and not gameProcessed and activated then
+        if mainMenuGui then
+            mainMenuGui.Enabled = not mainMenuGui.Enabled
         else
-            if menuGui then
-                menuGui:Destroy()
-                menuGui = nil
-            end
+            createMainMenu()
         end
     end
 end)
 
--- Загрузка скрипта Blox Fruits
-if game.PlaceId == 2753915549 then
-    pcall(function()
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/Fisterovna2/RobloxKeys/main/Loader.lua"))()
-    end)
-end
+-- Загрузка скрипта Blox Fruits (после активации)
+spawn(function()
+    while not activated do task.wait(1) end
+    
+    if game.PlaceId == 2753915549 then
+        pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Fisterovna2/RobloxKeys/main/Loader.lua"))()
+        end)
+    end
+end)
 
-print("Система ключей активирована. Нажмите M для открытия меню.")
+print("Ожидаю активации... Сгенерированный ключ: " .. accessKey)
