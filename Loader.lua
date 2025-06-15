@@ -74,7 +74,7 @@ local farmingModules = {
     bones = false
 }
 
--- Создаем GUI для активации
+-- Создаем GUI для активации с полем ввода ключа
 local function createActivationGui()
     activationGui = Instance.new("ScreenGui")
     activationGui.Name = "ActivationGUI"
@@ -113,6 +113,7 @@ local function createActivationGui()
     infoLabel.ZIndex = 11
     infoLabel.Parent = frame
     
+    -- ПОЛЕ ДЛЯ ВВОДА КЛЮЧА
     local keyBox = Instance.new("TextBox")
     keyBox.Size = UDim2.new(1, -20, 0, 40)
     keyBox.Position = UDim2.new(0, 10, 0, 100)
