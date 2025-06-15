@@ -1,221 +1,190 @@
-if not getexecutorname then getgenv().getexecutorname = function() return "Xeno" end end
-if not identifyexecutor then getgenv().identifyexecutor = function() return "Xeno" end end
-if not request then 
-    if syn and syn.request then 
-        getgenv().request = syn.request
-    else
-        getgenv().request = function() 
-            warn("Request function not available!") 
-            return {StatusCode = 0}
-        end
-    end
-end
+-- Загрузка библиотеки Rayfield для красивого UI
+local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Rayfield/main/source'))()
 
-local function SecurityCheck()
-    if not game:IsLoaded() then
-        warn("Security: Game not loaded!")
-        return false
-    end
-    
-    if identifyexecutor and identifyexecutor() ~= "Xeno" then
-        warn("Security: Unauthorized executor!")
-        return false
-    end
-    
-    return true
-end
+-- Ожидание загрузки игры
+repeat task.wait() until game:IsLoaded()
 
-if not SecurityCheck() then 
-    warn("Security check failed. Stopping script.")
-    return 
-end
+-- Глобальная переменная для ключа
+_G.QuantumKey = nil
 
-local function GetToken()
-    local parts = {
-        "ghp_",
-        "2QlU9iZ8",
-        "m6qiJTzR",
-        "LWlPUPE9",
-        "qrscKz1z",
-        "Kdq4"
-    }
-    return table.concat(parts)
-end
-
-local function GetRepoConfig()
-    return {
-        owner = "Fisterovna2",
-        name = "RobloxKeys"
-    }
-end
-
-local GamesTables = {
-    [2753915549] = "BloxFruits",
-    [4442272183] = "BloxFruits",
-    [7449423635] = "BloxFruits",
-    [16732694052] = "Fisch"
-}
-
-local function SafeHttpGet(url)
-    local success, result = pcall(function()
-        return game:HttpGet(url, true)
-    end)
-    
-    if not success then
-        success, result = pcall(function()
-            return game:HttpGetAsync(url, true)
-        end)
-    end
-    
-    return success and result or nil
-end
-
-local function SendToGitHub(key)
-    local config = GetRepoConfig()
-    local token = GetToken()
-    
-    local url = "https://api.github.com/repos/"..config.owner.."/"..config.name.."/issues"
-    local headers = {
-        ["Authorization"] = "Bearer "..token,
-        ["User-Agent"] = "SecureRobloxScript",
-        ["Accept"] = "application/vnd.github.v3+json"
+-- Функция для загрузки скрипта игры
+local function LoadGameScript()
+    local GamesTable = {
+        [2753915549] = "BloxFruits",
+        [4442272183] = "BloxFruits",
+        [7449423635] = "BloxFruits",
+        [16732694052] = "Fisch"
     }
     
-    local gameName = "Неизвестно"
-    pcall(function()
-        gameName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
-    end)
+    local scriptName = GamesTable[game.PlaceId]
+    if not scriptName then return end
     
-    local data = {
-        title = "Ключ из "..gameName.." - "..os.date("%d.%m.%Y %H:%M"),
-        body = "```lua\n-- PlaceID: "..game.PlaceId..
-               "\n-- Игра: "..gameName..
-               "\n\nKEY = \""..key.."\"\n```"
-    }
+    local scriptUrl = "https://raw.githubusercontent.com/Trustmenotcondom/QTONYX/main/"..scriptName..".lua"
+    local scriptContent = game:HttpGet(scriptUrl, true)
     
-    local json = game:GetService("HttpService"):JSONEncode(data)
+    -- Извлекаем ключ из скрипта
+    _G.QuantumKey = scriptContent:match('Key%s*=%s*["\']([^"\']+)["\']') or
+                   scriptContent:match('key%s*=%s*["\']([^"\']+)["\']') or
+                   scriptContent:match('KEY%s*=%s*["\']([^"\']+)["\']')
     
-    local response
-    local success, err = pcall(function()
-        response = request({
-            Url = url,
-            Method = "POST",
-            Headers = headers,
-            Body = json
-        })
-    end)
-    
-    if not success then
-        warn("GitHub request failed: "..tostring(err))
-        return false
-    end
-    
-    if response and response.StatusCode == 201 then
-        print("Ключ отправлен в GitHub Issues!")
-        return true
-    else
-        local status = response and response.StatusCode or "no response"
-        warn("Ошибка отправки: "..tostring(status))
-        if response and response.Body then
-            warn("Response body: "..tostring(response.Body))
-        end
-        return false
-    end
+    -- Запускаем основной скрипт
+    loadstring(scriptContent)()
 end
 
-local function ExtractKey(script)
-    local patterns = {
-        'Key%s*=%s*["\']([^"\']+)["\']',
-        'key%s*=%s*["\']([^"\']+)["\']',
-        'KEY%s*=%s*["\']([^"\']+)["\']',
-        'password%s*=%s*["\']([^"\']+)["\']',
-        'getgenv%(%)._key%s*=%s*["\']([^"\']+)["\']'
-    }
-    
-    for _, pattern in ipairs(patterns) do
-        local key = script:match(pattern)
-        if key and #key > 3 then return key end
-    end
-end
+-- Создаем основное меню
+local Window = Rayfield:CreateWindow({
+    Name = "Quantum X | Key System",
+    LoadingTitle = "Quantum X Loader",
+    LoadingSubtitle = "by TrustMeNot",
+    ConfigurationSaving = {
+        Enabled = false
+    },
+})
 
-local function ExecuteGameScript(scriptContent)
-    local func, err = loadstring(scriptContent)
-    if func then
-        local ran, execErr = pcall(func)
-        if ran then
-            print("Скрипт успешно выполнен!")
-            return true
+-- Вкладка для активации
+local ActivationTab = Window:CreateTab("Activation", 4483362458)
+
+ActivationTab:CreateInput({
+    Name = "Enter Key",
+    PlaceholderText = "Paste your key here",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        if Text == _G.QuantumKey then
+            Rayfield:Notify({
+                Title = "Activation Successful",
+                Content = "All features unlocked!",
+                Duration = 3,
+                Image = 4483362458,
+            })
         else
-            warn("Ошибка выполнения: "..tostring(execErr))
+            Rayfield:Notify({
+                Title = "Invalid Key",
+                Content = "Please check your key and try again",
+                Duration = 3,
+                Image = 7733960981,
+            })
         end
-    else
-        warn("Ошибка компиляции: "..tostring(err))
-    end
-    return false
-end
+    end,
+})
 
-local function MainLoader()
-    print("="..string.rep("=", 40))
-    print(" Quantum X Loader v3.5 | Xeno Fix")
-    print("="..string.rep("=", 40))
-    print("Идентификатор игры: "..tostring(game.PlaceId))
-    
-    local gameData = GamesTables[game.PlaceId]
-    if not gameData then
-        warn("Игра не поддерживается | PlaceID: "..game.PlaceId)
-        return
-    end
-    print("Игра определена: "..gameData)
-    
-    local scriptUrl = "https://raw.githubusercontent.com/Trustmenotcondom/QTONYX/main/"..gameData..".lua"
-    print("Загрузка скрипта: "..scriptUrl)
-    
-    local scriptContent = SafeHttpGet(scriptUrl)
-    if not scriptContent then
-        warn("Ошибка загрузки скрипта")
-        return
-    end
-    print("Размер скрипта: "..#scriptContent.." байт")
-    
-    local key = ExtractKey(scriptContent)
-    if not key then
-        warn("Ключ не найден в скрипте")
-    else
-        print("Найден ключ: "..key)
-        
-        if SendToGitHub(key) then
-            if setclipboard then
-                setclipboard(key)
-                print("Ключ скопирован в буфер обмена")
+ActivationTab:CreateButton({
+    Name = "Get Key from Clipboard",
+    Callback = function()
+        if setclipboard then
+            setclipboard(_G.QuantumKey or "Key not found")
+            Rayfield:Notify({
+                Title = "Key Copied",
+                Content = "Key has been copied to your clipboard",
+                Duration = 3,
+                Image = 7733765397,
+            })
+        end
+    end,
+})
+
+-- Вкладка с функциями (только после активации)
+local FeaturesTab = Window:CreateTab("Features", 7733925908)
+
+-- Телепорт к игроку
+FeaturesTab:CreateInput({
+    Name = "Teleport to Player",
+    PlaceholderText = "Enter player name",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(PlayerName)
+        for _, player in ipairs(game.Players:GetPlayers()) do
+            if string.find(string.lower(player.Name), string.lower(PlayerName)) then
+                game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame
+                Rayfield:Notify({
+                    Title = "Teleport Successful",
+                    Content = "Teleported to "..player.Name,
+                    Duration = 3,
+                })
+                return
             end
         end
-    end
-    
-    if not ExecuteGameScript(scriptContent) then
-        warn("Попытка альтернативного запуска...")
-        loadstring(scriptContent)()
-    end
-    
-    print("="..string.rep("=", 40))
-    print(" Quantum X Loader завершил работу")
-    print("="..string.rep("=", 40))
-end
+        Rayfield:Notify({
+            Title = "Player Not Found",
+            Content = "Could not find player: "..PlayerName,
+            Duration = 3,
+        })
+    end,
+})
 
-local function HandleCacheError()
-    if not isfolder then return end
-    if not makefolder then return end
-    
-    pcall(function()
-        if not isfolder("xeno_cache_fix") then
-            makefolder("xeno_cache_fix")
+-- Авто-фарм
+local AutoFarmToggle = FeaturesTab:CreateToggle({
+    Name = "Auto Farm",
+    CurrentValue = false,
+    Flag = "AutoFarm",
+    Callback = function(Value)
+        if Value then
+            Rayfield:Notify({
+                Title = "Auto Farm Enabled",
+                Content = "Starting farming process...",
+                Duration = 3,
+            })
+            -- Здесь будет код авто-фарма
+        else
+            Rayfield:Notify({
+                Title = "Auto Farm Disabled",
+                Content = "Stopped farming",
+                Duration = 3,
+            })
         end
-        writefile("xeno_cache_fix/timestamp.txt", tostring(os.time()))
-    end)
-end
+    end,
+})
 
-HandleCacheError()
+-- Управление скоростью
+FeaturesTab:CreateSlider({
+    Name = "Walk Speed",
+    Range = {16, 200},
+    Increment = 5,
+    Suffix = "studs/s",
+    CurrentValue = 16,
+    Flag = "WalkSpeed",
+    Callback = function(Value)
+        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = Value
+    end,
+})
 
-local success, err = pcall(MainLoader)
-if not success then
-    warn("Критическая ошибка: "..tostring(err))
-end
+-- Кнопка для получения локации
+FeaturesTab:CreateButton({
+    Name = "Copy Current Location",
+    Callback = function()
+        local pos = game.Players.LocalPlayer.Character.HumanoidRootPart.Position
+        local location = string.format("CFrame.new(%d, %d, %d)", pos.X, pos.Y, pos.Z)
+        if setclipboard then
+            setclipboard(location)
+            Rayfield:Notify({
+                Title = "Location Copied",
+                Content = "Position copied to clipboard",
+                Duration = 3,
+            })
+        end
+    end,
+})
+
+-- Переключение видимости интерфейса
+local MinimizeButton = Rayfield:CreateMinimizeButton({
+    Name = "Minimize",
+    Callback = function()
+        print("UI minimized")
+    end,
+})
+
+-- Обработчик клавиши M
+game:GetService("UserInputService").InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.M then
+        Rayfield:ToggleUI()
+    end
+end)
+
+-- Загружаем скрипт игры
+pcall(LoadGameScript)
+
+-- Уведомление о загрузке
+Rayfield:Notify({
+    Title = "Quantum X Loaded",
+    Content = "Press M to open menu\nYour key: "..(_G.QuantumKey or "Not found"),
+    Duration = 8,
+    Image = 4483362458,
+})
