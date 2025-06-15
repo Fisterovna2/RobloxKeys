@@ -166,6 +166,23 @@ local function createActivationGui()
         end
     end)
     
+    -- Кнопка закрытия
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Text = "ЗАКРЫТЬ (M)"
+    closeBtn.Size = UDim2.new(1, -20, 0, 40)
+    closeBtn.Position = UDim2.new(0, 10, 0, 190)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+    closeBtn.TextColor3 = Color3.white
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 16
+    closeBtn.ZIndex = 11
+    closeBtn.Parent = frame
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        activationGui:Destroy()
+        activationGui = nil
+    end)
+    
     return activationGui
 end
 
@@ -175,6 +192,7 @@ local function createMainMenu()
     mainMenuGui.Name = "MainMenuGUI"
     mainMenuGui.Parent = game:GetService("CoreGui")
     mainMenuGui.Enabled = false
+    mainMenuGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 350, 0, 400)
@@ -183,6 +201,7 @@ local function createMainMenu()
     frame.BorderSizePixel = 0
     frame.Active = true
     frame.Draggable = true
+    frame.ZIndex = 10
     frame.Parent = mainMenuGui
     
     local title = Instance.new("TextLabel")
@@ -192,6 +211,7 @@ local function createMainMenu()
     title.TextColor3 = Color3.fromRGB(0, 200, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 20
+    title.ZIndex = 11
     title.Parent = frame
     
     -- Список функций
@@ -213,6 +233,7 @@ local function createMainMenu()
         button.TextColor3 = Color3.white
         button.Font = Enum.Font.Gotham
         button.TextSize = 16
+        button.ZIndex = 11
         button.Parent = frame
         
         button.MouseButton1Click:Connect(function()
@@ -232,6 +253,7 @@ local function createMainMenu()
     closeBtn.TextColor3 = Color3.white
     closeBtn.Font = Enum.Font.GothamBold
     closeBtn.TextSize = 16
+    closeBtn.ZIndex = 11
     closeBtn.Parent = frame
     
     closeBtn.MouseButton1Click:Connect(function()
@@ -263,13 +285,22 @@ end
 -- Создаем GUI активации
 createActivationGui()
 
--- Обработчик клавиши M для основного меню
+-- Обработчик клавиши M для управления меню
 game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
-    if input.KeyCode == Enum.KeyCode.M and not gameProcessed and activated then
-        if mainMenuGui then
-            mainMenuGui.Enabled = not mainMenuGui.Enabled
+    if input.KeyCode == Enum.KeyCode.M and not gameProcessed then
+        if activated then
+            -- Переключение основного меню
+            if mainMenuGui then
+                mainMenuGui.Enabled = not mainMenuGui.Enabled
+            else
+                createMainMenu()
+            end
         else
-            createMainMenu()
+            -- Закрытие окна активации
+            if activationGui then
+                activationGui:Destroy()
+                activationGui = nil
+            end
         end
     end
 end)
