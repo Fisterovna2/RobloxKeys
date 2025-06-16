@@ -2,21 +2,20 @@ repeat task.wait() until game:IsLoaded()
 
 -- Глобальные переменные
 local farmingGui = nil
+local menuVisible = false
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 local TweenService = game:GetService("TweenService")
 
--- Состояния фарма
+-- Состояния фарма с визуальными индикаторами
 local farmingModules = {
-    mastery = { enabled = false, thread = nil },
-    fruits = { enabled = false, thread = nil },
-    chests = { enabled = false, thread = nil },
-    bones = { enabled = false, thread = nil }
+    mastery = { enabled = false, thread = nil, toggle = nil, light = nil },
+    fruits = { enabled = false, thread = nil, toggle = nil, light = nil },
+    chests = { enabled = false, thread = nil, toggle = nil, light = nil },
+    bones = { enabled = false, thread = nil, toggle = nil, light = nil }
 }
 
--- Визуальные темы для переключателей
+-- Цвета для визуальной индикации
 local colorThemes = {
     mastery = { on = Color3.fromRGB(0, 255, 170), off = Color3.fromRGB(100, 100, 100) },
     fruits = { on = Color3.fromRGB(255, 125, 0), off = Color3.fromRGB(100, 100, 100) },
@@ -24,104 +23,69 @@ local colorThemes = {
     bones = { on = Color3.fromRGB(180, 0, 255), off = Color3.fromRGB(100, 100, 100) }
 }
 
--- ======================= РЕАЛЬНЫЕ ФУНКЦИИ ФАРМА =======================
-
--- Функция фарма мастери (адаптирована из популярных скриптов)
-local function startMasteryFarm()
-    while farmingModules.mastery.enabled and task.wait(0.1) do
-        pcall(function()
-            local closest
-            local dist = math.huge
-            
-            for _, v in ipairs(workspace.Enemies:GetChildren()) do
-                if v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
-                    local d = (LocalPlayer.Character.HumanoidRootPart.Position - v.HumanoidRootPart.Position).Magnitude
-                    if d < dist then
-                        closest = v
-                        dist = d
-                    end
-                end
-            end
-            
-            if closest then
-                LocalPlayer.Character.HumanoidRootPart.CFrame = closest.HumanoidRootPart.CFrame * CFrame.new(0, 0, -5)
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                task.wait(0.1)
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-            end
-        end)
-    end
-end
-
--- Функция фарма фруктов (стандартная реализация)
-local function startFruitFarm()
-    while farmingModules.fruits.enabled and task.wait(1) do
-        pcall(function()
-            for _, v in ipairs(workspace:GetChildren()) do
-                if string.find(v.Name, "Fruit") and v:FindFirstChild("Handle") then
-                    LocalPlayer.Character.HumanoidRootPart.CFrame = v.Handle.CFrame
-                    fireproximityprompt(v.Handle.ProximityPrompt)
-                end
-            end
-        end)
-    end
-end
-
--- Функция фарма сундуков (оптимизированная версия)
-local function startChestFarm()
-    while farmingModules.chests.enabled and task.wait(1) do
-        pcall(function()
-            for _, v in ipairs(workspace:GetChildren()) do
-                if string.find(v.Name, "Chest") and v:FindFirstChild("ClickDetector") then
-                    LocalPlayer.Character.HumanoidRootPart.CFrame = v.CFrame * CFrame.new(0, 3, 0)
-                    fireclickdetector(v.ClickDetector)
-                end
-            end
-        end)
-    end
-end
-
--- Функция фарма костей (для Cemetery)
-local function startBonesFarm()
-    while farmingModules.bones.enabled and task.wait(0.5) do
-        pcall(function()
-            local target = workspace.Enemies:FindFirstChild("Skeleton Boss") or
-                           workspace.Enemies:FindFirstChild("Skeleton")
-            
-            if target then
-                LocalPlayer.Character.HumanoidRootPart.CFrame = target.HumanoidRootPart.CFrame * CFrame.new(0, 0, -8)
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                task.wait(0.1)
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-            end
-        end)
-    end
-end
-
--- ======================= ВИЗУАЛЬНЫЙ ИНТЕРФЕЙС =======================
-
--- Анимация переключателей
+-- Анимация переключения
 local function animateToggle(module, key)
     if module.toggle and module.light then
         local targetColor = module.enabled and colorThemes[key].on or colorThemes[key].off
         
+        -- Анимация фона
+        TweenService:Create(
+            module.toggle,
+            TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            { BackgroundColor3 = targetColor }
+        ):Play()
+        
+        -- Анимация "светодиода"
         TweenService:Create(
             module.light,
             TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
             { BackgroundColor3 = targetColor }
         ):Play()
         
+        -- Анимация текста
         module.toggle.Text = module.enabled and "ВКЛ" or "ВЫКЛ"
     end
 end
 
--- Создание меню
+-- Функция фарма мастери
+local function startMasteryFarm()
+    while farmingModules.mastery.enabled and task.wait(0.5) do
+        -- Ваш код фарма мастери
+        print("Фарм мастери активен...")
+    end
+end
+
+-- Функция фарма фруктов
+local function startFruitFarm()
+    while farmingModules.fruits.enabled and task.wait(1) do
+        -- Ваш код фарма фруктов
+        print("Фарм фруктов активен...")
+    end
+end
+
+-- Функция фарма сундуков
+local function startChestFarm()
+    while farmingModules.chests.enabled and task.wait(1) do
+        -- Ваш код фарма сундуков
+        print("Фарм сундуков активен...")
+    end
+end
+
+-- Функция фарма костей
+local function startBonesFarm()
+    while farmingModules.bones.enabled and task.wait(0.7) do
+        -- Ваш код фарма костей
+        print("Фарм костей активен...")
+    end
+end
+
+-- Создание меню с визуальными переключателями
 local function createFarmingMenu()
     if farmingGui then farmingGui:Destroy() end
     
     farmingGui = Instance.new("ScreenGui")
     farmingGui.Name = "FarmingMenuGUI"
-    farmingGui.Parent = game.CoreGui
+    farmingGui.Parent = game:GetService("CoreGui")
     
     local mainFrame = Instance.new("Frame")
     mainFrame.Size = UDim2.new(0, 380, 0, 420)
@@ -132,6 +96,35 @@ local function createFarmingMenu()
     mainFrame.Active = true
     mainFrame.Draggable = true
     mainFrame.Parent = farmingGui
+    
+    local background = Instance.new("Frame")
+    background.Size = UDim2.new(1, 0, 1, 0)
+    background.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+    background.BorderSizePixel = 0
+    background.ZIndex = 0
+    background.Parent = mainFrame
+    
+    -- Тень
+    local shadow = Instance.new("ImageLabel")
+    shadow.Size = UDim2.new(1, 10, 1, 10)
+    shadow.Position = UDim2.new(0, -5, 0, -5)
+    shadow.Image = "rbxassetid://1316045217"
+    shadow.ImageColor3 = Color3.new(0, 0, 0)
+    shadow.ScaleType = Enum.ScaleType.Slice
+    shadow.SliceCenter = Rect.new(10, 10, 118, 118)
+    shadow.BackgroundTransparency = 1
+    shadow.ZIndex = -1
+    shadow.Parent = mainFrame
+    
+    -- Заголовок
+    local title = Instance.new("TextLabel")
+    title.Text = "BLOCK FRUITS FARM MENU"
+    title.Size = UDim2.new(1, 0, 0, 50)
+    title.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    title.TextColor3 = Color3.fromRGB(0, 255, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 22
+    title.Parent = mainFrame
     
     -- Список функций
     local features = {
@@ -152,7 +145,7 @@ local function createFarmingMenu()
         container.BackgroundTransparency = 0.3
         container.Parent = mainFrame
         
-        -- Иконка
+        -- Иконка функции
         local iconLabel = Instance.new("TextLabel")
         iconLabel.Text = feature.icon
         iconLabel.Size = UDim2.new(0, 50, 0, 50)
@@ -162,7 +155,7 @@ local function createFarmingMenu()
         iconLabel.TextColor3 = colorThemes[feature.key].off
         iconLabel.Parent = container
         
-        -- Название
+        -- Название функции
         local label = Instance.new("TextLabel")
         label.Text = feature.name
         label.Size = UDim2.new(0.5, 0, 1, 0)
@@ -174,7 +167,7 @@ local function createFarmingMenu()
         label.BackgroundTransparency = 1
         label.Parent = container
         
-        -- Переключатель
+        -- Визуальный переключатель
         local toggleFrame = Instance.new("Frame")
         toggleFrame.Size = UDim2.new(0, 80, 0, 30)
         toggleFrame.Position = UDim2.new(0.7, 0, 0.3, 0)
@@ -182,7 +175,7 @@ local function createFarmingMenu()
         toggleFrame.BorderSizePixel = 0
         toggleFrame.Parent = container
         
-        -- Индикатор
+        -- "Светодиод" индикатор
         local light = Instance.new("Frame")
         light.Size = UDim2.new(0, 12, 0, 12)
         light.Position = UDim2.new(0.1, 0, 0.3, 0)
@@ -191,6 +184,7 @@ local function createFarmingMenu()
         light.ZIndex = 2
         light.Parent = toggleFrame
         
+        -- Круглый индикатор
         local corner = Instance.new("UICorner")
         corner.CornerRadius = UDim.new(1, 0)
         corner.Parent = light
@@ -206,9 +200,11 @@ local function createFarmingMenu()
         statusText.BackgroundTransparency = 1
         statusText.Parent = toggleFrame
         
-        -- Сохраняем ссылки
+        -- Сохраняем элементы для анимации
         farmingModules[feature.key].toggle = statusText
         farmingModules[feature.key].light = light
+        
+        -- Обновляем визуальное состояние
         animateToggle(farmingModules[feature.key], feature.key)
         
         -- Кликабельная область
@@ -222,7 +218,16 @@ local function createFarmingMenu()
         -- Обработчик клика
         clickArea.MouseButton1Click:Connect(function()
             farmingModules[feature.key].enabled = not farmingModules[feature.key].enabled
+            
+            -- Анимация переключения
             animateToggle(farmingModules[feature.key], feature.key)
+            
+            -- Звук переключения (опционально)
+            if farmingModules[feature.key].enabled then
+                -- Звук включения
+            else
+                -- Звук выключения
+            end
             
             -- Управление функциями
             if feature.key == "mastery" then
@@ -231,18 +236,21 @@ local function createFarmingMenu()
                 elseif farmingModules.mastery.thread then
                     task.cancel(farmingModules.mastery.thread)
                 end
+                
             elseif feature.key == "fruits" then
                 if farmingModules.fruits.enabled then
                     farmingModules.fruits.thread = task.spawn(startFruitFarm)
                 elseif farmingModules.fruits.thread then
                     task.cancel(farmingModules.fruits.thread)
                 end
+                
             elseif feature.key == "chests" then
                 if farmingModules.chests.enabled then
                     farmingModules.chests.thread = task.spawn(startChestFarm)
                 elseif farmingModules.chests.thread then
                     task.cancel(farmingModules.chests.thread)
                 end
+                
             elseif feature.key == "bones" then
                 if farmingModules.bones.enabled then
                     farmingModules.bones.thread = task.spawn(startBonesFarm)
@@ -265,21 +273,56 @@ local function createFarmingMenu()
     closeBtn.TextSize = 16
     closeBtn.Parent = mainFrame
     
+    -- Скругление углов кнопки
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 8)
+    btnCorner.Parent = closeBtn
+    
+    -- Эффект при наведении
+    closeBtn.MouseEnter:Connect(function()
+        TweenService:Create(closeBtn, TweenInfo.new(0.2), {
+            BackgroundTransparency = 0.1,
+            TextColor3 = Color3.new(1, 0.8, 0.8)
+        }:Play()
+    end)
+    
+    closeBtn.MouseLeave:Connect(function()
+        TweenService:Create(closeBtn, TweenInfo.new(0.2), {
+            BackgroundTransparency = 0.3,
+            TextColor3 = Color3.new(1, 1, 1)
+        }:Play()
+    end)
+    
     closeBtn.MouseButton1Click:Connect(function()
         farmingGui:Destroy()
+        menuVisible = false
     end)
+    
+    -- Скругление углов главного окна
+    local mainCorner = Instance.new("UICorner")
+    mainCorner.CornerRadius = UDim.new(0, 12)
+    mainCorner.Parent = mainFrame
 end
 
 -- Обработчик клавиши M
 game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.M and not gameProcessed then
-        if farmingGui and farmingGui.Parent then
-            farmingGui:Destroy()
-        else
+        menuVisible = not menuVisible
+        
+        if menuVisible then
             createFarmingMenu()
+        elseif farmingGui then
+            farmingGui:Destroy()
         end
     end
 end)
+
+-- Загрузка скрипта Blox Fruits
+if game.PlaceId == 2753915549 then
+    pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Fisterovna2/RobloxKeys/main/Loader.lua"))()
+    end)
+end
 
 -- Уведомление
 game.StarterGui:SetCore("SendNotification", {
