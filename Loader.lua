@@ -25,6 +25,33 @@ local colorThemes = {
     bones = { on = Color3.fromRGB(180, 0, 255), off = Color3.fromRGB(100, 100, 100) }
 }
 
+-- Настройки выбора мобов
+local mobSelection = {
+    world1 = {
+        ["Bandit"] = true,
+        ["Monkey"] = true,
+        ["Pirate"] = true
+    },
+    world2 = {
+        ["Desert Bandit"] = true,
+        ["Desert Officer"] = true,
+        ["Snow Bandit"] = true,
+        ["Snowman"] = true
+    },
+    world3 = {
+        ["Galley Pirate"] = true,
+        ["Galley Captain"] = true,
+        ["Forest Pirate"] = true
+    }
+}
+
+-- Переменные для полета
+local flying = false
+local flySpeed = 100
+local bodyVelocity = nil
+local bodyGyro = nil
+local noclipConnection = nil
+
 -- Анимация переключения
 local function animateToggle(module, key)
     if module.toggle and module.light then
@@ -49,34 +76,165 @@ local function animateToggle(module, key)
     end
 end
 
--- Функция для перемещения к цели
-local function moveTo(targetPosition)
-    if not LocalPlayer.Character then return end
-    local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
-    local rootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+-- Функция включения/выключения полета
+local function toggleFlight(enabled)
+    flying = enabled
+    local character = LocalPlayer.Character
+    if not character then return end
     
-    if humanoid and rootPart then
-        humanoid:MoveTo(targetPosition)
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return end
+    
+    if enabled then
+        -- Создаем инструменты для полета
+        bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        bodyVelocity.MaxForce = Vector3.new(10000, 10000, 10000)
+        bodyVelocity.P = 1000
+        bodyVelocity.Parent = humanoidRootPart
+        
+        bodyGyro = Instance.new("BodyGyro")
+        bodyGyro.MaxTorque = Vector3.new(10000, 10000, 10000)
+        bodyGyro.P = 1000
+        bodyGyro.D = 100
+        bodyGyro.Parent = humanoidRootPart
+        
+        -- Включаем ноклип
+        noclipConnection = RunService.Stepped:Connect(function()
+            if flying then
+                for _, part in ipairs(character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    else
+        -- Отключаем полет
+        if bodyVelocity then
+            bodyVelocity:Destroy()
+            bodyVelocity = nil
+        end
+        if bodyGyro then
+            bodyGyro:Destroy()
+            bodyGyro = nil
+        end
+        
+        -- Отключаем ноклип
+        if noclipConnection then
+            noclipConnection:Disconnect()
+            noclipConnection = nil
+        end
     end
+end
+
+-- Функция для полета к цели
+local function flyTo(targetPosition, heightOffset)
+    if not flying then toggleFlight(true) end
+    
+    local character = LocalPlayer.Character
+    if not character then return 9999 end
+    
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return 9999 end
+    
+    -- Добавляем смещение по высоте
+    local target = targetPosition + Vector3.new(0, heightOffset or 10, 0)
+    
+    -- Рассчитываем направление
+    local direction = (target - humanoidRootPart.Position).Unit
+    
+    -- Устанавливаем скорость
+    bodyVelocity.Velocity = direction * flySpeed
+    
+    -- Устанавливаем ориентацию
+    bodyGyro.CFrame = CFrame.new(humanoidRootPart.Position, humanoidRootPart.Position + direction)
+    
+    -- Возвращаем расстояние до цели
+    return (target - humanoidRootPart.Position).Magnitude
 end
 
 -- Функция для атаки врагов
 local function attackEnemy()
     -- Эмуляция атаки
     if not LocalPlayer.Character then return end
+    
+    -- Проверяем, есть ли оружие в руках
     local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
     
     if tool then
-        tool:Activate()
+        -- Используем оружие
+        for i = 1, 3 do
+            tool:Activate()
+            task.wait(0.1)
+        end
     else
-        -- Эмуляция клика мыши если нет инструмента
+        -- Эмуляция кликов мыши
         mouse1press()
-        task.wait(0.1)
+        task.wait(0.2)
         mouse1release()
     end
 end
 
--- Функция фарма мастери (с перемещением к врагам и атакой)
+-- Поиск лучшего врага по приоритету
+local function findBestEnemy()
+    if not LocalPlayer.Character then return nil end
+    
+    local bestEnemy = nil
+    local highestPriority = -math.huge
+    local characterPosition = LocalPlayer.Character.HumanoidRootPart.Position
+    
+    -- Приоритеты для разных типов врагов
+    local enemyPriority = {
+        ["Galley Captain"] = 100,
+        ["Desert Officer"] = 90,
+        ["Military Soldier"] = 80,
+        ["Pirate"] = 70,
+        ["Bandit"] = 60,
+        ["Monkey"] = 50
+    }
+    
+    for _, enemy in ipairs(workspace.Enemies:GetChildren()) do
+        if enemy:FindFirstChild("HumanoidRootPart") and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
+            local enemyName = enemy.Name
+            
+            -- Проверяем, выбран ли этот тип врага в настройках
+            local isSelected = false
+            local world = nil
+            
+            -- Определяем мир врага по его имени
+            if mobSelection.world1[enemyName] then
+                isSelected = mobSelection.world1[enemyName]
+                world = 1
+            elseif mobSelection.world2[enemyName] then
+                isSelected = mobSelection.world2[enemyName]
+                world = 2
+            elseif mobSelection.world3[enemyName] then
+                isSelected = mobSelection.world3[enemyName]
+                world = 3
+            end
+            
+            if isSelected then
+                -- Рассчитываем приоритет: базовый приоритет + здоровье + близость
+                local priority = enemyPriority[enemyName] or 50
+                priority = priority + enemy.Humanoid.Health * 0.1
+                
+                -- Учитываем расстояние (чем ближе, тем лучше)
+                local distance = (characterPosition - enemy.HumanoidRootPart.Position).Magnitude
+                priority = priority + (100 / math.max(1, distance))
+                
+                if priority > highestPriority then
+                    highestPriority = priority
+                    bestEnemy = enemy
+                end
+            end
+        end
+    end
+    
+    return bestEnemy
+end
+
+-- Функция фарма мастери (с полетом и атакой сверху)
 local function startMasteryFarm()
     while farmingModules.mastery.enabled and task.wait(0.1) do
         -- Проверка на смерть
@@ -85,35 +243,29 @@ local function startMasteryFarm()
             continue
         end
         
-        -- Поиск ближайшего врага
-        local nearestEnemy, minDistance = nil, math.huge
-        for _, enemy in ipairs(workspace.Enemies:GetChildren()) do
-            if enemy:FindFirstChild("HumanoidRootPart") and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
-                local distance = (LocalPlayer.Character.HumanoidRootPart.Position - enemy.HumanoidRootPart.Position).Magnitude
-                if distance < minDistance then
-                    minDistance = distance
-                    nearestEnemy = enemy
-                end
-            end
-        end
+        -- Поиск лучшего врага по приоритету
+        local bestEnemy = findBestEnemy()
         
-        if nearestEnemy then
-            -- Перемещение к врагу
-            moveTo(nearestEnemy.HumanoidRootPart.Position)
+        if bestEnemy then
+            -- Летим к врагу и позиционируемся над ним
+            local distance = flyTo(bestEnemy.HumanoidRootPart.Position, 15)
             
             -- Атака, если враг близко
-            if minDistance < 20 then
+            if distance < 50 then
                 attackEnemy()
             end
         else
-            print("Враги не найдены")
+            print("Подходящие враги не найдены. Проверьте настройки выбора мобов.")
         end
     end
+    
+    -- Отключаем полет при остановке фарма
+    if flying then toggleFlight(false) end
 end
 
--- Функция фарма фруктов
+-- Функция фарма фруктов (с полетом)
 local function startFruitFarm()
-    while farmingModules.fruits.enabled and task.wait(1) do
+    while farmingModules.fruits.enabled and task.wait(0.1) do
         -- Поиск фруктов
         local fruits = {}
         for _, fruit in ipairs(workspace:GetChildren()) do
@@ -129,14 +281,17 @@ local function startFruitFarm()
                        (b.Handle.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
             end)
             
-            moveTo(fruits[1].Handle.Position)
+            flyTo(fruits[1].Handle.Position, 5)
         end
     end
+    
+    -- Отключаем полет при остановке фарма
+    if flying then toggleFlight(false) end
 end
 
--- Функция фарма сундуков
+-- Функция фарма сундуков (с полетом)
 local function startChestFarm()
-    while farmingModules.chests.enabled and task.wait(1) do
+    while farmingModules.chests.enabled and task.wait(0.1) do
         -- Поиск сундуков
         local chests = {}
         for _, chest in ipairs(workspace:GetChildren()) do
@@ -152,14 +307,17 @@ local function startChestFarm()
                        (b.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
             end)
             
-            moveTo(chests[1].Position)
+            flyTo(chests[1].Position, 5)
         end
     end
+    
+    -- Отключаем полет при остановке фарма
+    if flying then toggleFlight(false) end
 end
 
--- Функция фарма костей
+-- Функция фарма костей (с полетом)
 local function startBonesFarm()
-    while farmingModules.bones.enabled and task.wait(0.7) do
+    while farmingModules.bones.enabled and task.wait(0.1) do
         -- Поиск костей
         local bones = {}
         for _, bone in ipairs(workspace:GetChildren()) do
@@ -175,9 +333,12 @@ local function startBonesFarm()
                        (b.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
             end)
             
-            moveTo(bones[1].Position)
+            flyTo(bones[1].Position, 5)
         end
     end
+    
+    -- Отключаем полет при остановке фарма
+    if flying then toggleFlight(false) end
 end
 
 -- Создание меню с визуальными переключателями
@@ -189,8 +350,8 @@ local function createFarmingMenu()
     farmingGui.Parent = game:GetService("CoreGui")
     
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 380, 0, 420)
-    mainFrame.Position = UDim2.new(0.5, -190, 0.5, -210)
+    mainFrame.Size = UDim2.new(0, 380, 0, 500) -- Увеличили высоту для настроек
+    mainFrame.Position = UDim2.new(0.5, -190, 0.5, -250)
     mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
     mainFrame.BackgroundTransparency = 0.1
     mainFrame.BorderSizePixel = 0
@@ -219,7 +380,7 @@ local function createFarmingMenu()
     
     -- Заголовок
     local title = Instance.new("TextLabel")
-    title.Text = "BLOCK FRUITS FARM MENU"
+    title.Text = "BLOCK FRUITS FARM MENU (FLY)"
     title.Size = UDim2.new(1, 0, 0, 50)
     title.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
     title.TextColor3 = Color3.fromRGB(0, 255, 255)
@@ -359,11 +520,93 @@ local function createFarmingMenu()
         end)
     end
     
+    -- Настройки выбора мобов
+    local mobsTitle = Instance.new("TextLabel")
+    mobsTitle.Text = "ВЫБОР МОБОВ:"
+    mobsTitle.Size = UDim2.new(0.9, 0, 0, 20)
+    mobsTitle.Position = UDim2.new(0.05, 0, 0, 380)
+    mobsTitle.TextColor3 = Color3.new(1, 1, 1)
+    mobsTitle.Font = Enum.Font.GothamBold
+    mobsTitle.TextSize = 16
+    mobsTitle.BackgroundTransparency = 1
+    mobsTitle.TextXAlignment = Enum.TextXAlignment.Left
+    mobsTitle.Parent = mainFrame
+    
+    -- Создаем контейнеры для миров
+    local worldFrames = {}
+    local worldToggles = {}
+    
+    for worldIndex = 1, 3 do
+        local worldFrame = Instance.new("Frame")
+        worldFrame.Size = UDim2.new(0.28, 0, 0, 30)
+        worldFrame.Position = UDim2.new(0.05 + (worldIndex-1)*0.31, 0, 0, 400)
+        worldFrame.BackgroundTransparency = 1
+        worldFrame.Parent = mainFrame
+        
+        local worldLabel = Instance.new("TextLabel")
+        worldLabel.Text = "МИР " .. worldIndex
+        worldLabel.Size = UDim2.new(0.4, 0, 1, 0)
+        worldLabel.Position = UDim2.new(0, 0, 0, 0)
+        worldLabel.TextColor3 = Color3.new(1, 1, 1)
+        worldLabel.Font = Enum.Font.Gotham
+        worldLabel.TextSize = 14
+        worldLabel.BackgroundTransparency = 1
+        worldLabel.TextXAlignment = Enum.TextXAlignment.Left
+        worldLabel.Parent = worldFrame
+        
+        local worldToggle = Instance.new("TextButton")
+        worldToggle.Size = UDim2.new(0.55, 0, 1, 0)
+        worldToggle.Position = UDim2.new(0.45, 0, 0, 0)
+        worldToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+        worldToggle.Text = "ВЫКЛ"
+        worldToggle.TextColor3 = Color3.new(0.8, 0.8, 0.8)
+        worldToggle.Font = Enum.Font.GothamBold
+        worldToggle.TextSize = 12
+        worldToggle.Parent = worldFrame
+        
+        worldToggles[worldIndex] = worldToggle
+        worldFrames[worldIndex] = worldFrame
+        
+        -- Обновляем состояние переключателя мира
+        local anyMobSelected = false
+        for mobName, selected in pairs(mobSelection["world"..worldIndex]) do
+            if selected then
+                anyMobSelected = true
+                break
+            end
+        end
+        
+        if anyMobSelected then
+            worldToggle.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+            worldToggle.Text = "ВКЛ"
+        end
+        
+        -- Обработчик клика для переключателя мира
+        worldToggle.MouseButton1Click:Connect(function()
+            local worldKey = "world"..worldIndex
+            local newState = worldToggle.Text == "ВЫКЛ"
+            
+            -- Переключаем все мобы в этом мире
+            for mobName, _ in pairs(mobSelection[worldKey]) do
+                mobSelection[worldKey][mobName] = newState
+            end
+            
+            -- Обновляем визуальное состояние
+            if newState then
+                worldToggle.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+                worldToggle.Text = "ВКЛ"
+            else
+                worldToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+                worldToggle.Text = "ВЫКЛ"
+            end
+        end)
+    end
+    
     -- Кнопка закрытия
     local closeBtn = Instance.new("TextButton")
     closeBtn.Text = "ЗАКРЫТЬ (M)"
     closeBtn.Size = UDim2.new(0.9, 0, 0, 40)
-    closeBtn.Position = UDim2.new(0.05, 0, 0, 360)
+    closeBtn.Position = UDim2.new(0.05, 0, 0, 440)
     closeBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
     closeBtn.BackgroundTransparency = 0.3
     closeBtn.TextColor3 = Color3.new(1, 1, 1)
@@ -376,7 +619,7 @@ local function createFarmingMenu()
     btnCorner.CornerRadius = UDim.new(0, 8)
     btnCorner.Parent = closeBtn
     
-    -- Эффект при наведении (ИСПРАВЛЕННАЯ ВЕРСИЯ)
+    -- Эффект при наведении
     closeBtn.MouseEnter:Connect(function()
         TweenService:Create(closeBtn, TweenInfo.new(0.2), {
             BackgroundTransparency = 0.1,
@@ -404,7 +647,7 @@ local function createFarmingMenu()
     return farmingGui
 end
 
--- Обработчик клавиши M (ИСПРАВЛЕННЫЙ)
+-- Обработчик клавиши M
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.M and not gameProcessed then
         menuVisible = not menuVisible
@@ -433,7 +676,7 @@ end
 task.spawn(function()
     task.wait(3) -- Ждем загрузки
     game.StarterGui:SetCore("SendNotification", {
-        Title = "ФАРМ МЕНЮ",
+        Title = "ФАРМ МЕНЮ (ПОЛЕТ)",
         Text = "Нажмите M для открытия/закрытия меню",
         Icon = "rbxassetid://6726578090",
         Duration = 5
