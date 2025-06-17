@@ -2,7 +2,6 @@ repeat task.wait(1) until game:IsLoaded() and game:GetService("CoreGui")
 
 -- Глобальные переменные
 local farmingGui = nil
-local menuVisible = false
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
 local TweenService = game:GetService("TweenService")
@@ -19,7 +18,7 @@ if not PhysicsService:GetCollisionGroups()[1] then
     PhysicsService:CollisionGroupSetCollidable("NoclipGroup", "Default", false)
 end
 
--- Состояния фарма с визуальными индикаторами
+-- Состояния фарма
 local farmingModules = {
     mastery = { enabled = false, thread = nil, toggle = nil, light = nil },
     fruits = { enabled = false, thread = nil, toggle = nil, light = nil },
@@ -60,21 +59,18 @@ local function animateToggle(module, key)
     if module.toggle and module.light then
         local targetColor = module.enabled and colorThemes[key].on or colorThemes[key].off
         
-        -- Анимация фона
         TweenService:Create(
             module.toggle,
             TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
             { BackgroundColor3 = targetColor }
         ):Play()
         
-        -- Анимация "светодиода"
         TweenService:Create(
             module.light,
             TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
             { BackgroundColor3 = targetColor }
         ):Play()
         
-        -- Анимация текста
         module.toggle.Text = module.enabled and "ВКЛ" or "ВЫКЛ"
     end
 end
@@ -113,12 +109,11 @@ local function flyTo(targetPosition, heightOffset)
     return (target - humanoidRootPart.Position).Magnitude
 end
 
--- Функция для атаки врагов
+-- Улучшенная функция для атаки врагов
 local function attackEnemy()
-    -- Эмуляция атаки
     if not LocalPlayer.Character then return end
     
-    -- Проверяем, есть ли оружие в руках
+    -- Эмуляция атаки
     local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
     
     if tool then
@@ -128,9 +123,9 @@ local function attackEnemy()
             task.wait(0.1)
         end
     else
-        -- Эмуляция кликов мыши
+        -- Эмуляция кликов мыши (более надежная)
         mouse1press()
-        task.wait(0.2)
+        task.wait(0.1)
         mouse1release()
     end
 end
@@ -160,7 +155,6 @@ local function findBestEnemy()
             -- Проверяем, выбран ли этот тип врага в настройках
             local isSelected = false
             
-            -- Определяем мир врага по его имени
             if mobSelection.world1[enemyName] then
                 isSelected = mobSelection.world1[enemyName]
             elseif mobSelection.world2[enemyName] then
@@ -189,7 +183,7 @@ local function findBestEnemy()
     return bestEnemy
 end
 
--- Функция фарма мастери (с полетом и атакой сверху)
+-- Улучшенная функция фарма мастери с атакой
 local function startMasteryFarm()
     while farmingModules.mastery.enabled and task.wait(0.1) do
         -- Проверка на смерть
@@ -206,110 +200,32 @@ local function startMasteryFarm()
         
         if bestEnemy then
             -- Летим к врагу и позиционируемся над ним
-            local distance = flyTo(bestEnemy.HumanoidRootPart.Position, 15)
+            flyTo(bestEnemy.HumanoidRootPart.Position, 15)
             
-            -- Атака, если враг близко
-            if distance < 50 then
-                attackEnemy()
-            end
+            -- Атака врага
+            attackEnemy()
         else
             print("Подходящие враги не найдены. Проверьте настройки выбора мобов.")
         end
     end
 end
 
--- Функция фарма фруктов (с полетом)
-local function startFruitFarm()
-    while farmingModules.fruits.enabled and task.wait(0.1) do
-        -- Включаем noclip
-        enableNoclip()
-        
-        -- Поиск фруктов
-        local fruits = {}
-        for _, fruit in ipairs(workspace:GetChildren()) do
-            if fruit.Name:find("Fruit") and fruit:FindFirstChild("Handle") then
-                table.insert(fruits, fruit)
-            end
-        end
-        
-        if #fruits > 0 then
-            -- Выбор ближайшего фрукта
-            table.sort(fruits, function(a,b)
-                return (a.Handle.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude <
-                       (b.Handle.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
-            end)
-            
-            flyTo(fruits[1].Handle.Position, 5)
-        end
-    end
-end
-
--- Функция фарма сундуков (с полетом)
-local function startChestFarm()
-    while farmingModules.chests.enabled and task.wait(0.1) do
-        -- Включаем noclip
-        enableNoclip()
-        
-        -- Поиск сундуков
-        local chests = {}
-        for _, chest in ipairs(workspace:GetChildren()) do
-            if chest.Name:find("Chest") and chest:FindFirstChild("Chest") then
-                table.insert(chests, chest.Chest)
-            end
-        end
-        
-        if #chests > 0 then
-            -- Выбор ближайшего сундука
-            table.sort(chests, function(a,b)
-                return (a.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude <
-                       (b.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
-            end)
-            
-            flyTo(chests[1].Position, 5)
-        end
-    end
-end
-
--- Функция фарма костей (с полетом)
-local function startBonesFarm()
-    while farmingModules.bones.enabled and task.wait(0.1) do
-        -- Включаем noclip
-        enableNoclip()
-        
-        -- Поиск костей
-        local bones = {}
-        for _, bone in ipairs(workspace:GetChildren()) do
-            if bone.Name == "Bone" and bone:IsA("MeshPart") then
-                table.insert(bones, bone)
-            end
-        end
-        
-        if #bones > 0 then
-            -- Выбор ближайшей кости
-            table.sort(bones, function(a,b)
-                return (a.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude <
-                       (b.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
-            end)
-            
-            flyTo(bones[1].Position, 5)
-        end
-    end
-end
-
 -- Создание меню с визуальными переключателями
 local function createFarmingMenu()
+    -- Удаляем старое меню если есть
     if farmingGui then 
-        farmingGui.Enabled = not farmingGui.Enabled
-        return 
+        farmingGui:Destroy() 
+        farmingGui = nil
     end
     
+    -- Создаем новое GUI
     farmingGui = Instance.new("ScreenGui")
     farmingGui.Name = "FarmingMenuGUI"
     farmingGui.Parent = game:GetService("CoreGui")
     farmingGui.ResetOnSpawn = false
     
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 380, 0, 500) -- Увеличили высоту для настроек
+    mainFrame.Size = UDim2.new(0, 380, 0, 500)
     mainFrame.Position = UDim2.new(0.5, -190, 0.5, -250)
     mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
     mainFrame.BackgroundTransparency = 0.1
@@ -339,7 +255,7 @@ local function createFarmingMenu()
     
     -- Заголовок
     local title = Instance.new("TextLabel")
-    title.Text = "BLOCK FRUITS FARM MENU (NOCLIP+FLY)"
+    title.Text = "BLOCK FRUITS FARM MENU"
     title.Size = UDim2.new(1, 0, 0, 50)
     title.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
     title.TextColor3 = Color3.fromRGB(0, 255, 255)
@@ -576,7 +492,7 @@ local function createFarmingMenu()
     btnCorner.CornerRadius = UDim.new(0, 8)
     btnCorner.Parent = closeBtn
     
-    -- Эффект при наведении (ИСПРАВЛЕННАЯ ВЕРСИЯ)
+    -- Эффект при наведении
     closeBtn.MouseEnter:Connect(function()
         TweenService:Create(closeBtn, TweenInfo.new(0.2), {
             BackgroundTransparency = 0.1,
@@ -592,23 +508,29 @@ local function createFarmingMenu()
     end)
     
     closeBtn.MouseButton1Click:Connect(function()
-        farmingGui.Enabled = false
+        farmingGui:Destroy()
+        farmingGui = nil
     end)
     
     -- Скругление углов главного окна
     local mainCorner = Instance.new("UICorner")
     mainCorner.CornerRadius = UDim.new(0, 12)
     mainCorner.Parent = mainFrame
+    
+    return farmingGui
 end
 
--- Обработчик клавиши M
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if input.KeyCode == Enum.KeyCode.M and not gameProcessed then
-        if not farmingGui then
-            createFarmingMenu()
-        else
+-- Простой и надежный обработчик клавиши M
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.M then
+        -- Переключаем видимость меню
+        if farmingGui then
             farmingGui.Enabled = not farmingGui.Enabled
+        else
+            createFarmingMenu()
         end
+        
+        print("Меню переключено. Состояние:", farmingGui and farmingGui.Enabled or "не создано")
     end
 end)
 
@@ -617,24 +539,19 @@ task.spawn(function()
     task.wait(3) -- Ждем загрузки
     game.StarterGui:SetCore("SendNotification", {
         Title = "ФАРМ МЕНЮ АКТИВИРОВАН",
-        Text = "Нажмите M для открытия меню\nNoclip и Fly включены автоматически",
+        Text = "Нажмите M для открытия/закрытия меню",
         Icon = "rbxassetid://6726578090",
         Duration = 10
     })
     print("Фарм-меню готово! Нажмите M для открытия.")
 end)
 
--- Автоматическое обновление noclip при смерти
-LocalPlayer.CharacterAdded:Connect(function(character)
-    character:WaitForChild("Humanoid").Died:Connect(function()
-        for key, module in pairs(farmingModules) do
-            if module.enabled and module.thread then
-                task.cancel(module.thread)
-                module.thread = nil
-                module.enabled = false
-            end
-        end
-    end)
+-- Диагностика
+task.spawn(function()
+    while true do
+        task.wait(5)
+        print("Скрипт активен. Меню:", farmingGui and (farmingGui.Enabled and "открыто" or "закрыто") or "не создано")
+    end
 end)
 
-print("Фарм-скрипт успешно загружен!")
+print("Фарм-скрипт успешно загружен! Нажмите M для открытия меню")
