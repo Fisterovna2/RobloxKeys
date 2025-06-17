@@ -121,8 +121,9 @@ local function flyTo(targetPosition, heightOffset)
 end
 
 -- Улучшенная функция для атаки врагов
-local function attackEnemy()
-    if not LocalPlayer.Character then return end
+local function attackEnemy(enemy)
+    if not LocalPlayer.Character or not enemy then return end
+    if not enemy:FindFirstChild("Humanoid") or enemy.Humanoid.Health <= 0 then return end
     
     -- Пробуем использовать сначала меч, потом оружие, потом стиль боя
     local sword = nil
@@ -158,6 +159,20 @@ local function attackEnemy()
         mouse1press()
         task.wait(0.1)
         mouse1release()
+    end
+    
+    -- Расширяем хитбокс врага (увеличиваем размеры его коллизии)
+    if enemy:FindFirstChild("HumanoidRootPart") then
+        local hitbox = enemy:FindFirstChild("Hitbox") or Instance.new("Part", enemy)
+        hitbox.Name = "Hitbox"
+        hitbox.Size = Vector3.new(5, 5, 5)
+        hitbox.Transparency = 1
+        hitbox.CanCollide = false
+        hitbox.Anchored = false
+        hitbox.Position = enemy.HumanoidRootPart.Position
+        local weld = Instance.new("WeldConstraint", hitbox)
+        weld.Part0 = enemy.HumanoidRootPart
+        weld.Part1 = hitbox
     end
 end
 
@@ -237,7 +252,13 @@ local function startMasteryFarm()
             
             -- Атака врага только если мы на безопасном расстоянии
             if distance < 100 then
-                attackEnemy()
+                attackEnemy(bestEnemy)
+                
+                -- Добиваем врага
+                while bestEnemy and bestEnemy:FindFirstChild("Humanoid") and bestEnemy.Humanoid.Health > 0 do
+                    attackEnemy(bestEnemy)
+                    task.wait(0.1)
+                end
             end
         else
             print("Подходящие враги не найдены. Проверьте настройки выбора мобов.")
@@ -270,17 +291,18 @@ local function findBestFruit()
     return bestFruit
 end
 
--- Функция для поиска Blox Fruits Gacha
+-- Функция для поиска Blox Fruits Gacha (исправленная)
 local function findGacha()
     for _, npc in ipairs(workspace.NPCs:GetChildren()) do
-        if (npc.Name:find("Dealer") or npc.Name:find("Gacha")) and npc:FindFirstChild("HumanoidRootPart") then
+        if (npc.Name:find("Blox Fruits Dealer") or npc.Name:find("Blox Fruit Dealer") or npc.Name:find("Fruit Dealer")) 
+            and npc:FindFirstChild("HumanoidRootPart") then
             return npc
         end
     end
     return nil
 end
 
--- Функция фарма фруктов
+-- Функция фарма фруктов (исправленная)
 local function startFruitFarm()
     while farmingModules.fruits.enabled and task.wait(0.1) do
         -- Проверка на смерть
@@ -309,7 +331,7 @@ local function startFruitFarm()
     end
 end
 
--- Функция для поиска сундуков
+-- Функция для поиска сундуков (исправленная)
 local function findBestChest()
     local chests = {}
     
@@ -343,7 +365,7 @@ local function findBestChest()
     return bestChest
 end
 
--- Функция фарма сундуков
+-- Функция фарма сундуков (исправленная)
 local function startChestFarm()
     while farmingModules.chests.enabled and task.wait(0.1) do
         -- Проверка на смерть
@@ -360,6 +382,12 @@ local function startChestFarm()
         
         if bestChest then
             flyTo(bestChest.Position, 5)
+            
+            -- Сбор сундука при близком расстоянии
+            if (LocalPlayer.Character.HumanoidRootPart.Position - bestChest.Position).Magnitude < 10 then
+                firetouchinterest(LocalPlayer.Character.HumanoidRootPart, bestChest, 0)
+                firetouchinterest(LocalPlayer.Character.HumanoidRootPart, bestChest, 1)
+            end
         else
             print("Сундуки не найдены")
         end
