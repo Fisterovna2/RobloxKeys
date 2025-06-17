@@ -1,4 +1,4 @@
-repeat task.wait(1) until game:IsLoaded() and game:GetService("CoreGui")
+repeat task.wait(1) until game:IsLoaded()
 
 -- Глобальные переменные
 local farmingGui = nil
@@ -8,6 +8,7 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local PhysicsService = game:GetService("PhysicsService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 -- Ожидаем появления персонажа
 repeat task.wait(1) until LocalPlayer.Character
@@ -53,6 +54,15 @@ local colorThemes = {
     chests = { on = Color3.fromRGB(255, 255, 0), off = Color3.fromRGB(100, 100, 100) },
     bones = { on = Color3.fromRGB(180, 0, 255), off = Color3.fromRGB(100, 100, 100) }
 }
+
+-- Эмуляция кликов мыши
+local function mouse1press()
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, false)
+end
+
+local function mouse1release()
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, false)
+end
 
 -- Анимация переключения
 local function animateToggle(module, key)
@@ -113,17 +123,38 @@ end
 local function attackEnemy()
     if not LocalPlayer.Character then return end
     
-    -- Эмуляция атаки
-    local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    -- Пробуем использовать сначала меч, потом оружие, потом стиль боя
+    local sword = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    local gun = nil
     
-    if tool then
-        -- Используем оружие
+    if not sword then
+        for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
+            if tool:IsA("Tool") then
+                if tool.Name:find("Sword") or tool.Name:find("Melee") then
+                    sword = tool
+                    break
+                elseif tool.Name:find("Gun") or tool.Name:find("Weapon") then
+                    gun = tool
+                end
+            end
+        end
+    end
+    
+    -- Экипируем оружие при необходимости
+    if sword then
+        sword.Parent = LocalPlayer.Character
         for i = 1, 3 do
-            tool:Activate()
+            sword:Activate()
+            task.wait(0.1)
+        end
+    elseif gun then
+        gun.Parent = LocalPlayer.Character
+        for i = 1, 3 do
+            gun:Activate()
             task.wait(0.1)
         end
     else
-        -- Эмуляция кликов мыши (более надежная)
+        -- Эмуляция кликов мыши
         mouse1press()
         task.wait(0.1)
         mouse1release()
@@ -207,6 +238,142 @@ local function startMasteryFarm()
         else
             print("Подходящие враги не найдены. Проверьте настройки выбора мобов.")
         end
+    end
+end
+
+-- Функция для поиска фруктов
+local function findBestFruit()
+    local fruitsFolder = workspace:FindFirstChild("Fruits")
+    if not fruitsFolder then return nil end
+    
+    local bestFruit = nil
+    local minDistance = math.huge
+    local character = LocalPlayer.Character
+    if not character then return nil end
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil end
+    
+    for _, fruit in ipairs(fruitsFolder:GetChildren()) do
+        if fruit:FindFirstChild("Handle") then
+            local distance = (rootPart.Position - fruit.Handle.Position).Magnitude
+            if distance < minDistance then
+                minDistance = distance
+                bestFruit = fruit
+            end
+        end
+    end
+    
+    return bestFruit
+end
+
+-- Функция для поиска Gacha
+local function findGacha()
+    for _, npc in ipairs(workspace.NPCs:GetChildren()) do
+        if npc.Name:find("Dealer") and npc:FindFirstChild("HumanoidRootPart") then
+            return npc
+        end
+    end
+    return nil
+end
+
+-- Функция фарма фруктов
+local function startFruitFarm()
+    while farmingModules.fruits.enabled and task.wait(0.1) do
+        -- Проверка на смерть
+        if not LocalPlayer.Character or LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health <= 0 then
+            task.wait(2)
+            continue
+        end
+        
+        -- Включаем noclip
+        enableNoclip()
+        
+        -- Поиск фруктов
+        local bestFruit = findBestFruit()
+        
+        if bestFruit then
+            flyTo(bestFruit.Handle.Position, 5)
+        else
+            -- Если фруктов нет, летим к Gacha
+            local gacha = findGacha()
+            if gacha then
+                flyTo(gacha.HumanoidRootPart.Position, 5)
+            else
+                print("Фрукты и Gacha не найдены")
+            end
+        end
+    end
+end
+
+-- Функция для поиска сундуков
+local function findBestChest()
+    local chests = {}
+    
+    -- Собираем все сундуки
+    for _, obj in ipairs(workspace:GetChildren()) do
+        if obj.Name:find("Chest") and obj:FindFirstChild("Chest") then
+            table.insert(chests, obj)
+        end
+    end
+    
+    local bestChest = nil
+    local minDistance = math.huge
+    local character = LocalPlayer.Character
+    if not character then return nil end
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil end
+    
+    for _, chest in ipairs(chests) do
+        if chest:FindFirstChild("Chest") then
+            local distance = (rootPart.Position - chest.Chest.Position).Magnitude
+            if distance < minDistance then
+                minDistance = distance
+                bestChest = chest
+            end
+        end
+    end
+    
+    return bestChest
+end
+
+-- Функция фарма сундуков
+local function startChestFarm()
+    while farmingModules.chests.enabled and task.wait(0.1) do
+        -- Проверка на смерть
+        if not LocalPlayer.Character or LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health <= 0 then
+            task.wait(2)
+            continue
+        end
+        
+        -- Включаем noclip
+        enableNoclip()
+        
+        -- Поиск сундуков
+        local bestChest = findBestChest()
+        
+        if bestChest then
+            flyTo(bestChest.Chest.Position, 5)
+        else
+            print("Сундуки не найдены")
+        end
+    end
+end
+
+-- Функция фарма костей
+local function startBonesFarm()
+    while farmingModules.bones.enabled and task.wait(0.1) do
+        -- Проверка на смерть
+        if not LocalPlayer.Character or LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health <= 0 then
+            task.wait(2)
+            continue
+        end
+        
+        -- Включаем noclip
+        enableNoclip()
+        
+        -- Поиск костей (заглушка)
+        print("Фарм костей в разработке")
+        task.wait(3)
     end
 end
 
