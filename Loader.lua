@@ -119,14 +119,14 @@ local function flyTo(targetPosition, heightOffset)
     return (target - humanoidRootPart.Position).Magnitude
 end
 
--- Увеличение хитбокса как у Будды
-local function enlargeHitbox()
+-- Увеличение хитбокса игрока как у Будды
+local function enlargePlayerHitbox()
     local character = LocalPlayer.Character
     if not character then return end
     
     local hitbox = character:FindFirstChild("BuddhaHitbox") or Instance.new("Part", character)
     hitbox.Name = "BuddhaHitbox"
-    hitbox.Size = Vector3.new(20, 20, 20)  -- Большой хитбокс как у Будды
+    hitbox.Size = Vector3.new(25, 25, 25)  -- Большой хитбокс как у Будды
     hitbox.Transparency = 1
     hitbox.CanCollide = false
     hitbox.Anchored = false
@@ -141,11 +141,12 @@ local function enlargeHitbox()
 end
 
 -- Улучшенная функция для атаки врагов
-local function attackEnemy()
-    if not LocalPlayer.Character then return end
+local function attackEnemy(enemy)
+    if not LocalPlayer.Character or not enemy then return end
+    if not enemy:FindFirstChild("Humanoid") or enemy.Humanoid.Health <= 0 then return end
     
-    -- Увеличиваем хитбокс
-    enlargeHitbox()
+    -- Увеличиваем хитбокс игрока
+    enlargePlayerHitbox()
     
     -- Пробуем использовать сначала меч, потом оружие, потом стиль боя
     local sword = nil
@@ -237,7 +238,7 @@ local function findBestEnemy()
     return bestEnemy
 end
 
--- Улучшенная функция фарма мастери с атакой
+-- Улучшенная функция фарма мастери с добиванием
 local function startMasteryFarm()
     while farmingModules.mastery.enabled and task.wait(0.1) do
         -- Проверка на смерть
@@ -254,10 +255,16 @@ local function startMasteryFarm()
         
         if bestEnemy then
             -- Летим к врагу и позиционируемся над ним
-            flyTo(bestEnemy.HumanoidRootPart.Position, 15)
+            local distance = flyTo(bestEnemy.HumanoidRootPart.Position, 15)
             
-            -- Атака врага
-            attackEnemy()
+            -- Атака врага только если мы на безопасном расстоянии
+            if distance < 100 then
+                -- Добиваем врага до смерти
+                while bestEnemy and bestEnemy:FindFirstChild("Humanoid") and bestEnemy.Humanoid.Health > 0 do
+                    attackEnemy(bestEnemy)
+                    task.wait(0.1)
+                end
+            end
         else
             print("Подходящие враги не найдены. Проверьте настройки выбора мобов.")
         end
@@ -292,7 +299,8 @@ end
 -- Функция для поиска Blox Fruits Gacha (который крутит фрукты)
 local function findGacha()
     for _, npc in ipairs(workspace.NPCs:GetChildren()) do
-        if npc.Name:find("Blox Fruit Dealer") and npc:FindFirstChild("HumanoidRootPart") then
+        if (npc.Name:find("Blox Fruits Gacha") or npc.Name:find("Fruit Gacha") or npc.Name:find("Blox Fruit Gacha")) 
+            and npc:FindFirstChild("HumanoidRootPart") then
             return npc
         end
     end
@@ -328,14 +336,16 @@ local function startFruitFarm()
     end
 end
 
--- Функция для поиска сундуков
+-- Функция для поиска сундуков (исправленная)
 local function findBestChest()
     local chests = {}
     
-    -- Собираем все сундуки
-    for _, obj in ipairs(workspace:GetChildren()) do
-        if obj.Name:find("Chest") and obj:FindFirstChild("Chest") then
-            table.insert(chests, obj)
+    -- Собираем все сундуки по надежным признакам
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and (obj.Name:find("Chest") or obj.Name:find("Crate")) then
+            if obj:FindFirstChild("Chest") or obj:FindFirstChild("ChestBox") then
+                table.insert(chests, obj)
+            end
         end
     end
     
@@ -347,11 +357,12 @@ local function findBestChest()
     if not rootPart then return nil end
     
     for _, chest in ipairs(chests) do
-        if chest:FindFirstChild("Chest") then
-            local distance = (rootPart.Position - chest.Chest.Position).Magnitude
+        local chestPart = chest:FindFirstChild("Chest") or chest:FindFirstChild("ChestBox") or chest.PrimaryPart
+        if chestPart then
+            local distance = (rootPart.Position - chestPart.Position).Magnitude
             if distance < minDistance then
                 minDistance = distance
-                bestChest = chest.Chest
+                bestChest = chestPart
             end
         end
     end
@@ -359,7 +370,7 @@ local function findBestChest()
     return bestChest
 end
 
--- Функция фарма сундуков
+-- Функция фарма сундуков (исправленная)
 local function startChestFarm()
     while farmingModules.chests.enabled and task.wait(0.1) do
         -- Проверка на смерть
@@ -388,17 +399,17 @@ local function startChestFarm()
     end
 end
 
--- Функция для поиска костей
+-- Функция для поиска костей (исправленная)
 local function findBone()
-    for _, obj in ipairs(workspace:GetChildren()) do
-        if obj.Name:find("Bone") and obj:IsA("MeshPart") then
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj.Name:find("Bone") and (obj:IsA("MeshPart") or obj:IsA("Part")) then
             return obj
         end
     end
     return nil
 end
 
--- Функция фарма костей
+-- Функция фарма костей (исправленная)
 local function startBonesFarm()
     while farmingModules.bones.enabled and task.wait(0.1) do
         -- Проверка на смерть
@@ -415,6 +426,12 @@ local function startBonesFarm()
         
         if bone then
             flyTo(bone.Position, 5)
+            
+            -- Сбор кости при близком расстоянии
+            if (LocalPlayer.Character.HumanoidRootPart.Position - bone.Position).Magnitude < 10 then
+                firetouchinterest(LocalPlayer.Character.HumanoidRootPart, bone, 0)
+                firetouchinterest(LocalPlayer.Character.HumanoidRootPart, bone, 1)
+            end
         else
             print("Кости не найдены")
         end
