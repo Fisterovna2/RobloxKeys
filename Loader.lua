@@ -2,6 +2,7 @@ repeat task.wait(1) until game:IsLoaded()
 
 -- Глобальные переменные
 local farmingGui = nil
+local mobSelectionGui = nil
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
 local TweenService = game:GetService("TweenService")
@@ -165,7 +166,7 @@ local function attackEnemy(enemy)
     if enemy:FindFirstChild("HumanoidRootPart") then
         local hitbox = enemy:FindFirstChild("Hitbox") or Instance.new("Part", enemy)
         hitbox.Name = "Hitbox"
-        hitbox.Size = Vector3.new(5, 5, 5)
+        hitbox.Size = Vector3.new(15, 15, 15)  -- Увеличенный хитбокс
         hitbox.Transparency = 1
         hitbox.CanCollide = false
         hitbox.Anchored = false
@@ -294,8 +295,7 @@ end
 -- Функция для поиска Blox Fruits Gacha (исправленная)
 local function findGacha()
     for _, npc in ipairs(workspace.NPCs:GetChildren()) do
-        if (npc.Name:find("Blox Fruits Dealer") or npc.Name:find("Blox Fruit Dealer") or npc.Name:find("Fruit Dealer")) 
-            and npc:FindFirstChild("HumanoidRootPart") then
+        if (npc.Name:find("Blox Fruit Dealer") or npc.Name:find("Fruit Dealer")) and npc:FindFirstChild("HumanoidRootPart") then
             return npc
         end
     end
@@ -612,86 +612,6 @@ local function createFarmingMenu()
         end)
     end
     
-    -- Настройки выбора мобов
-    local mobsTitle = Instance.new("TextLabel")
-    mobsTitle.Text = "ВЫБОР МОБОВ:"
-    mobsTitle.Size = UDim2.new(0.9, 0, 0, 20)
-    mobsTitle.Position = UDim2.new(0.05, 0, 0, 380)
-    mobsTitle.TextColor3 = Color3.new(1, 1, 1)
-    mobsTitle.Font = Enum.Font.GothamBold
-    mobsTitle.TextSize = 16
-    mobsTitle.BackgroundTransparency = 1
-    mobsTitle.TextXAlignment = Enum.TextXAlignment.Left
-    mobsTitle.Parent = mainFrame
-    
-    -- Создаем контейнеры для миров
-    local worldToggles = {}
-    
-    for worldIndex = 1, 3 do
-        local worldFrame = Instance.new("Frame")
-        worldFrame.Size = UDim2.new(0.28, 0, 0, 30)
-        worldFrame.Position = UDim2.new(0.05 + (worldIndex-1)*0.31, 0, 0, 400)
-        worldFrame.BackgroundTransparency = 1
-        worldFrame.Parent = mainFrame
-        
-        local worldLabel = Instance.new("TextLabel")
-        worldLabel.Text = "МИР " .. worldIndex
-        worldLabel.Size = UDim2.new(0.4, 0, 1, 0)
-        worldLabel.Position = UDim2.new(0, 0, 0, 0)
-        worldLabel.TextColor3 = Color3.new(1, 1, 1)
-        worldLabel.Font = Enum.Font.Gotham
-        worldLabel.TextSize = 14
-        worldLabel.BackgroundTransparency = 1
-        worldLabel.TextXAlignment = Enum.TextXAlignment.Left
-        worldLabel.Parent = worldFrame
-        
-        local worldToggle = Instance.new("TextButton")
-        worldToggle.Size = UDim2.new(0.55, 0, 1, 0)
-        worldToggle.Position = UDim2.new(0.45, 0, 0, 0)
-        worldToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-        worldToggle.Text = "ВЫКЛ"
-        worldToggle.TextColor3 = Color3.new(0.8, 0.8, 0.8)
-        worldToggle.Font = Enum.Font.GothamBold
-        worldToggle.TextSize = 12
-        worldToggle.Parent = worldFrame
-        
-        worldToggles[worldIndex] = worldToggle
-        
-        -- Обновляем состояние переключателя мира
-        local anyMobSelected = false
-        for mobName, selected in pairs(mobSelection["world"..worldIndex]) do
-            if selected then
-                anyMobSelected = true
-                break
-            end
-        end
-        
-        if anyMobSelected then
-            worldToggle.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-            worldToggle.Text = "ВКЛ"
-        end
-        
-        -- Обработчик клика для переключателя мира
-        worldToggle.MouseButton1Click:Connect(function()
-            local worldKey = "world"..worldIndex
-            local newState = worldToggle.Text == "ВЫКЛ"
-            
-            -- Переключаем все мобы в этом мире
-            for mobName, _ in pairs(mobSelection[worldKey]) do
-                mobSelection[worldKey][mobName] = newState
-            end
-            
-            -- Обновляем визуальное состояние
-            if newState then
-                worldToggle.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-                worldToggle.Text = "ВКЛ"
-            else
-                worldToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-                worldToggle.Text = "ВЫКЛ"
-            end
-        end)
-    end
-    
     -- Кнопка закрытия
     local closeBtn = Instance.new("TextButton")
     closeBtn.Text = "ЗАКРЫТЬ (M)"
@@ -737,17 +657,159 @@ local function createFarmingMenu()
     return farmingGui
 end
 
--- Простой и надежный обработчик клавиши M
+-- Создание меню выбора мобов
+local function createMobSelectionMenu()
+    -- Удаляем старое меню если есть
+    if mobSelectionGui then 
+        mobSelectionGui:Destroy() 
+        mobSelectionGui = nil
+    end
+    
+    -- Создаем новое GUI
+    mobSelectionGui = Instance.new("ScreenGui")
+    mobSelectionGui.Name = "MobSelectionGUI"
+    mobSelectionGui.Parent = game:GetService("CoreGui")
+    mobSelectionGui.ResetOnSpawn = false
+    
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0, 380, 0, 500)
+    mainFrame.Position = UDim2.new(0.5, -190, 0.5, -250)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    mainFrame.BackgroundTransparency = 0.1
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Active = true
+    mainFrame.Draggable = true
+    mainFrame.Parent = mobSelectionGui
+    
+    -- Заголовок
+    local title = Instance.new("TextLabel")
+    title.Text = "ВЫБОР МОБОВ"
+    title.Size = UDim2.new(1, 0, 0, 50)
+    title.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    title.TextColor3 = Color3.fromRGB(0, 255, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 22
+    title.Parent = mainFrame
+    
+    -- Создаем контейнеры для миров
+    local worldToggles = {}
+    local yOffset = 60
+    
+    for worldIndex = 1, 3 do
+        -- Заголовок мира
+        local worldTitle = Instance.new("TextLabel")
+        worldTitle.Text = "МИР " .. worldIndex
+        worldTitle.Size = UDim2.new(0.9, 0, 0, 30)
+        worldTitle.Position = UDim2.new(0.05, 0, 0, yOffset)
+        worldTitle.TextColor3 = Color3.fromRGB(0, 200, 255)
+        worldTitle.Font = Enum.Font.GothamBold
+        worldTitle.TextSize = 16
+        worldTitle.BackgroundTransparency = 1
+        worldTitle.TextXAlignment = Enum.TextXAlignment.Left
+        worldTitle.Parent = mainFrame
+        
+        yOffset = yOffset + 35
+        
+        -- Переключатели для каждого моба в мире
+        for mobName, selected in pairs(mobSelection["world"..worldIndex]) do
+            local mobFrame = Instance.new("Frame")
+            mobFrame.Size = UDim2.new(0.9, 0, 0, 30)
+            mobFrame.Position = UDim2.new(0.05, 0, 0, yOffset)
+            mobFrame.BackgroundTransparency = 1
+            mobFrame.Parent = mainFrame
+            
+            local mobLabel = Instance.new("TextLabel")
+            mobLabel.Text = mobName
+            mobLabel.Size = UDim2.new(0.7, 0, 1, 0)
+            mobLabel.Position = UDim2.new(0, 0, 0, 0)
+            mobLabel.TextColor3 = Color3.new(1, 1, 1)
+            mobLabel.Font = Enum.Font.Gotham
+            mobLabel.TextSize = 14
+            mobLabel.BackgroundTransparency = 1
+            mobLabel.TextXAlignment = Enum.TextXAlignment.Left
+            mobLabel.Parent = mobFrame
+            
+            local mobToggle = Instance.new("TextButton")
+            mobToggle.Size = UDim2.new(0.25, 0, 1, 0)
+            mobToggle.Position = UDim2.new(0.75, 0, 0, 0)
+            mobToggle.BackgroundColor3 = selected and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+            mobToggle.Text = selected and "ВКЛ" or "ВЫКЛ"
+            mobToggle.TextColor3 = Color3.new(1, 1, 1)
+            mobToggle.Font = Enum.Font.GothamBold
+            mobToggle.TextSize = 12
+            mobToggle.Parent = mobFrame
+            
+            -- Обработчик клика для переключателя моба
+            mobToggle.MouseButton1Click:Connect(function()
+                local newState = not mobSelection["world"..worldIndex][mobName]
+                mobSelection["world"..worldIndex][mobName] = newState
+                
+                if newState then
+                    mobToggle.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+                    mobToggle.Text = "ВКЛ"
+                else
+                    mobToggle.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+                    mobToggle.Text = "ВЫКЛ"
+                end
+            end)
+            
+            yOffset = yOffset + 35
+        end
+        
+        -- Добавляем отступ между мирами
+        yOffset = yOffset + 15
+    end
+    
+    -- Кнопка закрытия
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Text = "ЗАКРЫТЬ (N)"
+    closeBtn.Size = UDim2.new(0.9, 0, 0, 40)
+    closeBtn.Position = UDim2.new(0.05, 0, 0, yOffset + 10)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    closeBtn.BackgroundTransparency = 0.3
+    closeBtn.TextColor3 = Color3.new(1, 1, 1)
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 16
+    closeBtn.Parent = mainFrame
+    
+    -- Скругление углов кнопки
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 8)
+    btnCorner.Parent = closeBtn
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        mobSelectionGui:Destroy()
+        mobSelectionGui = nil
+    end)
+    
+    -- Скругление углов главного окна
+    local mainCorner = Instance.new("UICorner")
+    mainCorner.CornerRadius = UDim.new(0, 12)
+    mainCorner.Parent = mainFrame
+    
+    return mobSelectionGui
+end
+
+-- Обработчики клавиш
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.M then
-        -- Переключаем видимость меню
+        -- Переключаем видимость меню фарма
         if farmingGui then
             farmingGui.Enabled = not farmingGui.Enabled
         else
             createFarmingMenu()
         end
         
-        print("Меню переключено. Состояние:", farmingGui and farmingGui.Enabled or "не создано")
+        print("Меню фарма переключено. Состояние:", farmingGui and farmingGui.Enabled or "не создано")
+    elseif input.KeyCode == Enum.KeyCode.N then
+        -- Переключаем видимость меню выбора мобов
+        if mobSelectionGui then
+            mobSelectionGui.Enabled = not mobSelectionGui.Enabled
+        else
+            createMobSelectionMenu()
+        end
+        
+        print("Меню выбора мобов переключено. Состояние:", mobSelectionGui and mobSelectionGui.Enabled or "не создано")
     end
 end)
 
@@ -756,7 +818,7 @@ task.spawn(function()
     task.wait(3) -- Ждем загрузки
     game.StarterGui:SetCore("SendNotification", {
         Title = "ФАРМ МЕНЮ АКТИВИРОВАН",
-        Text = "Нажмите M для открытия/закрытия меню",
+        Text = "Нажмите M для открытия меню фарма\nНажмите N для выбора мобов",
         Icon = "rbxassetid://6726578090",
         Duration = 10
     })
@@ -766,9 +828,11 @@ end)
 -- Диагностика
 task.spawn(function()
     while true do
-        task.wait(5)
-        print("Скрипт активен. Меню:", farmingGui and (farmingGui.Enabled and "открыто" or "закрыто") or "не создано")
+        task.wait(10)
+        print("Скрипт активен.")
+        print("Меню фарма:", farmingGui and (farmingGui.Enabled and "открыто" or "закрыто") or "не создано")
+        print("Меню мобов:", mobSelectionGui and (mobSelectionGui.Enabled and "открыто" or "закрыто") or "не создано")
     end
 end)
 
-print("Фарм-скрипт успешно загружен! Нажмите M для открытия меню")
+print("Фарм-скрипт успешно загружен!")
