@@ -10,6 +10,7 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local PhysicsService = game:GetService("PhysicsService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- Ожидаем появления персонажа
 repeat task.wait(1) until LocalPlayer.Character
@@ -218,7 +219,7 @@ local function attackEnemy(enemy)
     end
 end
 
--- Поиск лучшего врага по приоритету
+-- Поиск лучшего врага по приоритету (оптимизированный)
 local function findBestEnemy()
     if not LocalPlayer.Character then 
         log("Персонаж не найден для поиска врагов")
@@ -229,30 +230,37 @@ local function findBestEnemy()
     local highestPriority = -math.huge
     local characterPosition = LocalPlayer.Character.HumanoidRootPart.Position
     
-    local enemies = workspace:FindFirstChild("Enemies")
-    if not enemies then
-        log("Папка с врагами не найдена")
-        return nil
-    end
-    
     local currentWorld = getCurrentWorld()
+    log("Текущий мир: " .. currentWorld)
     
-    for _, enemy in ipairs(enemies:GetChildren()) do
-        if enemy:FindFirstChild("HumanoidRootPart") and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
-            local enemyName = enemy.Name
-            
-            -- Проверяем, выбран ли этот тип врага в настройках для текущего мира
-            local isSelected = mobSelection[currentWorld][enemyName]
-            
-            if isSelected then
-                -- Рассчитываем приоритет: здоровье + близость
-                local priority = enemy.Humanoid.Health * 0.1
-                local distance = (characterPosition - enemy.HumanoidRootPart.Position).Magnitude
-                priority = priority + (100 / math.max(1, distance))
-                
-                if priority > highestPriority then
-                    highestPriority = priority
-                    bestEnemy = enemy
+    -- Возможные места поиска врагов
+    local searchLocations = {
+        workspace:FindFirstChild("Enemies"),
+        workspace:FindFirstChild("Live"),
+        workspace:FindFirstChild("NPCs"),
+        workspace
+    }
+    
+    for _, location in ipairs(searchLocations) do
+        if location then
+            for _, enemy in ipairs(location:GetChildren()) do
+                if enemy:IsA("Model") and enemy:FindFirstChild("HumanoidRootPart") and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
+                    local enemyName = enemy.Name
+                    
+                    -- Проверяем, выбран ли этот тип врага в настройках
+                    local isSelected = mobSelection[currentWorld][enemyName]
+                    
+                    if isSelected then
+                        -- Рассчитываем приоритет: здоровье + близость
+                        local priority = enemy.Humanoid.Health * 0.1
+                        local distance = (characterPosition - enemy.HumanoidRootPart.Position).Magnitude
+                        priority = priority + (100 / math.max(1, distance))
+                        
+                        if priority > highestPriority then
+                            highestPriority = priority
+                            bestEnemy = enemy
+                        end
+                    end
                 end
             end
         end
@@ -303,14 +311,8 @@ local function startMasteryFarm()
     log("Фарм мастери остановлен")
 end
 
--- Функция для поиска фруктов
+-- Функция для поиска фруктов (оптимизированная)
 local function findBestFruit()
-    local fruitsFolder = workspace:FindFirstChild("Fruits")
-    if not fruitsFolder then 
-        log("Папка с фруктами не найдена")
-        return nil 
-    end
-    
     local bestFruit = nil
     local minDistance = math.huge
     local character = LocalPlayer.Character
@@ -318,12 +320,24 @@ local function findBestFruit()
     local rootPart = character:FindFirstChild("HumanoidRootPart")
     if not rootPart then return nil end
     
-    for _, fruit in ipairs(fruitsFolder:GetChildren()) do
-        if fruit:FindFirstChild("Handle") then
-            local distance = (rootPart.Position - fruit.Handle.Position).Magnitude
-            if distance < minDistance then
-                minDistance = distance
-                bestFruit = fruit
+    -- Возможные места поиска фруктов
+    local searchLocations = {
+        workspace:FindFirstChild("Fruits"),
+        workspace:FindFirstChild("Fruit"),
+        workspace:FindFirstChild("SpawnedFruits"),
+        workspace
+    }
+    
+    for _, location in ipairs(searchLocations) do
+        if location then
+            for _, obj in ipairs(location:GetDescendants()) do
+                if obj.Name == "Handle" and (obj.Parent.Name:find("Fruit") or obj.Parent.Name:find("Apple")) then
+                    local distance = (rootPart.Position - obj.Position).Magnitude
+                    if distance < minDistance then
+                        minDistance = distance
+                        bestFruit = obj.Parent
+                    end
+                end
             end
         end
     end
@@ -388,22 +402,8 @@ local function startFruitFarm()
     log("Фарм фруктов остановлен")
 end
 
--- Функция для поиска сундуков
+-- Функция для поиска сундуков (оптимизированная)
 local function findBestChest()
-    local chests = {}
-    
-    -- Поиск всех сундуков в рабочем пространстве
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj.Name:find("Chest") and obj:FindFirstChild("Chest") then
-            table.insert(chests, obj)
-        end
-    end
-    
-    if #chests == 0 then
-        log("Сундуки не найдены")
-        return nil
-    end
-    
     local bestChest = nil
     local minDistance = math.huge
     local character = LocalPlayer.Character
@@ -411,19 +411,23 @@ local function findBestChest()
     local rootPart = character:FindFirstChild("HumanoidRootPart")
     if not rootPart then return nil end
     
-    for _, chest in ipairs(chests) do
-        local chestPart = chest:FindFirstChild("Chest")
-        if chestPart then
-            local distance = (rootPart.Position - chestPart.Position).Magnitude
-            if distance < minDistance then
-                minDistance = distance
-                bestChest = chestPart
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj.Name:find("Chest") and obj:IsA("Model") and obj:FindFirstChild("Chest") then
+            local chestPart = obj.Chest
+            if chestPart:IsA("BasePart") then
+                local distance = (rootPart.Position - chestPart.Position).Magnitude
+                if distance < minDistance then
+                    minDistance = distance
+                    bestChest = chestPart
+                end
             end
         end
     end
     
     if bestChest then
         log("Найден сундук: " .. bestChest.Parent.Name)
+    else
+        log("Сундуки не найдены")
     end
     
     return bestChest
@@ -432,7 +436,7 @@ end
 -- Функция фарма сундуков
 local function startChestFarm()
     log("Фарм сундуков запущен")
-    while farmingModules.chests.enabled and task.wait(0.2) do  -- Увеличен интервал для оптимизации
+    while farmingModules.chests.enabled and task.wait(0.2) do
         -- Проверка на смерть
         if not LocalPlayer.Character or LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health <= 0 then
             log("Персонаж мертв, ожидаем возрождения")
@@ -463,14 +467,23 @@ local function startChestFarm()
     log("Фарм сундуков остановлен")
 end
 
--- Функция для поиска костей
+-- Функция для поиска костей (полностью переработанная)
 local function findBone()
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj.Name:lower():find("bone") and (obj:IsA("MeshPart") or obj:IsA("Part")) then
-            -- Проверяем, что это настоящая кость
-            if obj:FindFirstChild("ClickDetector") then
-                log("Найдена кость: " .. obj.Name)
-                return obj
+    -- Возможные места поиска костей
+    local searchLocations = {
+        workspace:FindFirstChild("Bones"),
+        workspace:FindFirstChild("Items"),
+        workspace:FindFirstChild("World"),
+        workspace
+    }
+    
+    for _, location in ipairs(searchLocations) do
+        if location then
+            for _, obj in ipairs(location:GetDescendants()) do
+                if obj:IsA("MeshPart") and obj.Name:lower():find("bone") and obj:FindFirstChild("ClickDetector") then
+                    log("Найдена кость: " .. obj.Name)
+                    return obj
+                end
             end
         end
     end
