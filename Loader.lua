@@ -56,6 +56,18 @@ local colorThemes = {
     bones = { on = Color3.fromRGB(180, 0, 255), off = Color3.fromRGB(100, 100, 100) }
 }
 
+-- Определение текущего мира
+local function getCurrentWorld()
+    local playerLevel = LocalPlayer.Data.Level.Value
+    if playerLevel < 700 then
+        return "world1"
+    elseif playerLevel < 1500 then
+        return "world2"
+    else
+        return "world3"
+    end
+end
+
 -- Логирование с меткой времени
 local function log(message)
     print("[FARM] [" .. os.date("%H:%M:%S") .. "] " .. message)
@@ -223,20 +235,14 @@ local function findBestEnemy()
         return nil
     end
     
+    local currentWorld = getCurrentWorld()
+    
     for _, enemy in ipairs(enemies:GetChildren()) do
         if enemy:FindFirstChild("HumanoidRootPart") and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
             local enemyName = enemy.Name
             
-            -- Проверяем, выбран ли этот тип врага в настройках
-            local isSelected = false
-            
-            if mobSelection.world1[enemyName] then
-                isSelected = mobSelection.world1[enemyName]
-            elseif mobSelection.world2[enemyName] then
-                isSelected = mobSelection.world2[enemyName]
-            elseif mobSelection.world3[enemyName] then
-                isSelected = mobSelection.world3[enemyName]
-            end
+            -- Проверяем, выбран ли этот тип врага в настройках для текущего мира
+            local isSelected = mobSelection[currentWorld][enemyName]
             
             if isSelected then
                 -- Рассчитываем приоритет: здоровье + близость
@@ -460,9 +466,12 @@ end
 -- Функция для поиска костей
 local function findBone()
     for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj.Name:find("Bone") and (obj:IsA("MeshPart") or obj:IsA("Part")) then
-            log("Найдена кость: " .. obj.Name)
-            return obj
+        if obj.Name:lower():find("bone") and (obj:IsA("MeshPart") or obj:IsA("Part")) then
+            -- Проверяем, что это настоящая кость
+            if obj:FindFirstChild("ClickDetector") then
+                log("Найдена кость: " .. obj.Name)
+                return obj
+            end
         end
     end
     
@@ -660,6 +669,22 @@ local function createFarmingMenu()
         createMobSelectionMenu()
     end)
     
+    -- Кнопка закрытия
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Text = "ЗАКРЫТЬ МЕНЮ"
+    closeBtn.Size = UDim2.new(0.9, 0, 0, 40)
+    closeBtn.Position = UDim2.new(0.05, 0, 0, 490)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    closeBtn.TextColor3 = Color3.new(1, 1, 1)
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 16
+    closeBtn.Parent = mainFrame
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        farmingGui:Destroy()
+        farmingGui = nil
+    end)
+    
     -- Скругление углов
     local mainCorner = Instance.new("UICorner")
     mainCorner.CornerRadius = UDim.new(0, 12)
@@ -694,10 +719,16 @@ local function createMobSelectionMenu()
     title.TextSize = 22
     title.Parent = mainFrame
     
+    local worlds = {
+        { name = "МИР 1", key = "world1" },
+        { name = "МИР 2", key = "world2" },
+        { name = "МИР 3", key = "world3" }
+    }
+    
     local yOffset = 60
-    for worldIndex = 1, 3 do
+    for _, world in ipairs(worlds) do
         local worldTitle = Instance.new("TextLabel")
-        worldTitle.Text = "МИР " .. worldIndex
+        worldTitle.Text = world.name
         worldTitle.Size = UDim2.new(0.9, 0, 0, 30)
         worldTitle.Position = UDim2.new(0.05, 0, 0, yOffset)
         worldTitle.TextColor3 = Color3.fromRGB(0, 200, 255)
@@ -709,7 +740,7 @@ local function createMobSelectionMenu()
         
         yOffset = yOffset + 35
         
-        for mobName, selected in pairs(mobSelection["world"..worldIndex]) do
+        for mobName, selected in pairs(mobSelection[world.key]) do
             local mobFrame = Instance.new("Frame")
             mobFrame.Size = UDim2.new(0.9, 0, 0, 30)
             mobFrame.Position = UDim2.new(0.05, 0, 0, yOffset)
@@ -738,8 +769,8 @@ local function createMobSelectionMenu()
             mobToggle.Parent = mobFrame
             
             mobToggle.MouseButton1Click:Connect(function()
-                local newState = not mobSelection["world"..worldIndex][mobName]
-                mobSelection["world"..worldIndex][mobName] = newState
+                local newState = not mobSelection[world.key][mobName]
+                mobSelection[world.key][mobName] = newState
                 
                 if newState then
                     mobToggle.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
@@ -767,6 +798,7 @@ local function createMobSelectionMenu()
     
     closeBtn.MouseButton1Click:Connect(function()
         mobSelectionGui:Destroy()
+        mobSelectionGui = nil
     end)
     
     local mainCorner = Instance.new("UICorner")
@@ -779,14 +811,14 @@ end
 -- Обработчики клавиш
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.M then
-        if farmingGui then
-            farmingGui.Enabled = not farmingGui.Enabled
+        if farmingGui and farmingGui.Enabled then
+            farmingGui.Enabled = false
         else
             createFarmingMenu()
         end
     elseif input.KeyCode == Enum.KeyCode.N then
-        if mobSelectionGui then
-            mobSelectionGui.Enabled = not mobSelectionGui.Enabled
+        if mobSelectionGui and mobSelectionGui.Enabled then
+            mobSelectionGui.Enabled = false
         else
             createMobSelectionMenu()
         end
