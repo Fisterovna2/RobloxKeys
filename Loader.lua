@@ -56,6 +56,11 @@ local colorThemes = {
     bones = { on = Color3.fromRGB(180, 0, 255), off = Color3.fromRGB(100, 100, 100) }
 }
 
+-- Логирование с меткой времени
+local function log(message)
+    print("[FARM] [" .. os.date("%H:%M:%S") .. "] " .. message)
+end
+
 -- Эмуляция кликов мыши
 local function mouse1press()
     VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, false)
@@ -102,10 +107,16 @@ end
 -- Функция для полета к цели
 local function flyTo(targetPosition, heightOffset)
     local character = LocalPlayer.Character
-    if not character then return 9999 end
+    if not character then 
+        log("Персонаж не найден для полета")
+        return 9999 
+    end
     
     local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-    if not humanoidRootPart then return 9999 end
+    if not humanoidRootPart then 
+        log("HumanoidRootPart не найден")
+        return 9999 
+    end
     
     -- Добавляем смещение по высоте
     local target = targetPosition + Vector3.new(0, heightOffset or 15, 0)
@@ -120,31 +131,40 @@ local function flyTo(targetPosition, heightOffset)
     return (target - humanoidRootPart.Position).Magnitude
 end
 
--- Увеличение хитбокса игрока как у Будды
+-- Увеличение хитбокса игрока
 local function enlargePlayerHitbox()
     local character = LocalPlayer.Character
     if not character then return end
     
-    local hitbox = character:FindFirstChild("BuddhaHitbox") or Instance.new("Part", character)
-    hitbox.Name = "BuddhaHitbox"
-    hitbox.Size = Vector3.new(25, 25, 25)
-    hitbox.Transparency = 1
-    hitbox.CanCollide = false
-    hitbox.Anchored = false
-    hitbox.Position = character.HumanoidRootPart.Position
-    
-    -- Прикрепляем к корневой части
-    if not hitbox:FindFirstChildOfClass("WeldConstraint") then
-        local weld = Instance.new("WeldConstraint", hitbox)
+    local hitbox = character:FindFirstChild("BuddhaHitbox")
+    if not hitbox then
+        hitbox = Instance.new("Part")
+        hitbox.Name = "BuddhaHitbox"
+        hitbox.Size = Vector3.new(25, 25, 25)
+        hitbox.Transparency = 1
+        hitbox.CanCollide = false
+        hitbox.Anchored = false
+        hitbox.Parent = character
+        
+        local weld = Instance.new("WeldConstraint")
         weld.Part0 = character.HumanoidRootPart
         weld.Part1 = hitbox
+        weld.Parent = hitbox
+        log("Создан увеличенный хитбокс")
     end
 end
 
 -- Улучшенная функция для атаки врагов
 local function attackEnemy(enemy)
-    if not LocalPlayer.Character or not enemy then return end
-    if not enemy:FindFirstChild("Humanoid") or enemy.Humanoid.Health <= 0 then return end
+    if not LocalPlayer.Character or not enemy then 
+        log("Невозможно атаковать: персонаж или враг отсутствует")
+        return 
+    end
+    
+    if not enemy:FindFirstChild("Humanoid") or enemy.Humanoid.Health <= 0 then
+        log("Враг мертв или не имеет Humanoid")
+        return
+    end
     
     -- Увеличиваем хитбокс игрока
     enlargePlayerHitbox()
@@ -188,30 +208,34 @@ end
 
 -- Поиск лучшего врага по приоритету
 local function findBestEnemy()
-    if not LocalPlayer.Character then return nil end
+    if not LocalPlayer.Character then 
+        log("Персонаж не найден для поиска врагов")
+        return nil 
+    end
     
     local bestEnemy = nil
     local highestPriority = -math.huge
     local characterPosition = LocalPlayer.Character.HumanoidRootPart.Position
     
-    for _, enemy in ipairs(workspace.Enemies:GetChildren()) do
+    local enemies = workspace:FindFirstChild("Enemies")
+    if not enemies then
+        log("Папка с врагами не найдена")
+        return nil
+    end
+    
+    for _, enemy in ipairs(enemies:GetChildren()) do
         if enemy:FindFirstChild("HumanoidRootPart") and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
             local enemyName = enemy.Name
             
             -- Проверяем, выбран ли этот тип врага в настройках
             local isSelected = false
-            local worldKey
             
-            -- Определяем мир врага
             if mobSelection.world1[enemyName] then
                 isSelected = mobSelection.world1[enemyName]
-                worldKey = "world1"
             elseif mobSelection.world2[enemyName] then
                 isSelected = mobSelection.world2[enemyName]
-                worldKey = "world2"
             elseif mobSelection.world3[enemyName] then
                 isSelected = mobSelection.world3[enemyName]
-                worldKey = "world3"
             end
             
             if isSelected then
@@ -228,14 +252,22 @@ local function findBestEnemy()
         end
     end
     
+    if bestEnemy then
+        log("Найден враг: " .. bestEnemy.Name)
+    else
+        log("Подходящие враги не найдены")
+    end
+    
     return bestEnemy
 end
 
 -- Улучшенная функция фарма мастери с добиванием
 local function startMasteryFarm()
+    log("Фарм мастери запущен")
     while farmingModules.mastery.enabled and task.wait(0.1) do
         -- Проверка на смерть
         if not LocalPlayer.Character or LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health <= 0 then
+            log("Персонаж мертв, ожидаем возрождения")
             task.wait(2)
             continue
         end
@@ -253,21 +285,25 @@ local function startMasteryFarm()
             -- Атака врага только если мы на безопасном расстоянии
             if distance < 100 then
                 -- Добиваем врага до смерти
-                while bestEnemy and bestEnemy:FindFirstChild("Humanoid") and bestEnemy.Humanoid.Health > 0 do
+                while bestEnemy and bestEnemy:FindFirstChild("Humanoid") and bestEnemy.Humanoid.Health > 0 and farmingModules.mastery.enabled do
                     attackEnemy(bestEnemy)
                     task.wait(0.1)
                 end
             end
         else
-            print("Подходящие враги не найдены. Нажмите N для выбора мобов.")
+            task.wait(1)
         end
     end
+    log("Фарм мастери остановлен")
 end
 
 -- Функция для поиска фруктов
 local function findBestFruit()
     local fruitsFolder = workspace:FindFirstChild("Fruits")
-    if not fruitsFolder then return nil end
+    if not fruitsFolder then 
+        log("Папка с фруктами не найдена")
+        return nil 
+    end
     
     local bestFruit = nil
     local minDistance = math.huge
@@ -286,24 +322,41 @@ local function findBestFruit()
         end
     end
     
+    if bestFruit then
+        log("Найден фрукт: " .. bestFruit.Name)
+    else
+        log("Фрукты не найдены")
+    end
+    
     return bestFruit
 end
 
 -- Функция для поиска Blox Fruits Gacha
 local function findGacha()
-    for _, npc in ipairs(workspace.NPCs:GetChildren()) do
+    local npcs = workspace:FindFirstChild("NPCs")
+    if not npcs then 
+        log("Папка NPC не найдена")
+        return nil 
+    end
+    
+    for _, npc in ipairs(npcs:GetChildren()) do
         if npc.Name:find("Blox Fruits Gacha") and npc:FindFirstChild("HumanoidRootPart") then
+            log("Найден Gacha: " .. npc.Name)
             return npc
         end
     end
+    
+    log("Gacha не найден")
     return nil
 end
 
 -- Функция фарма фруктов
 local function startFruitFarm()
+    log("Фарм фруктов запущен")
     while farmingModules.fruits.enabled and task.wait(0.1) do
         -- Проверка на смерть
         if not LocalPlayer.Character or LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health <= 0 then
+            log("Персонаж мертв, ожидаем возрождения")
             task.wait(2)
             continue
         end
@@ -322,21 +375,27 @@ local function startFruitFarm()
             if gacha then
                 flyTo(gacha.HumanoidRootPart.Position, 5)
             else
-                print("Фрукты и Gacha не найдены")
+                task.wait(1)
             end
         end
     end
+    log("Фарм фруктов остановлен")
 end
 
 -- Функция для поиска сундуков
 local function findBestChest()
     local chests = {}
     
-    -- Собираем все сундуки
+    -- Поиск всех сундуков в рабочем пространстве
     for _, obj in ipairs(workspace:GetDescendants()) do
         if obj.Name:find("Chest") and obj:FindFirstChild("Chest") then
             table.insert(chests, obj)
         end
+    end
+    
+    if #chests == 0 then
+        log("Сундуки не найдены")
+        return nil
     end
     
     local bestChest = nil
@@ -347,7 +406,7 @@ local function findBestChest()
     if not rootPart then return nil end
     
     for _, chest in ipairs(chests) do
-        local chestPart = chest:FindFirstChild("Chest") or chest.PrimaryPart
+        local chestPart = chest:FindFirstChild("Chest")
         if chestPart then
             local distance = (rootPart.Position - chestPart.Position).Magnitude
             if distance < minDistance then
@@ -357,14 +416,20 @@ local function findBestChest()
         end
     end
     
+    if bestChest then
+        log("Найден сундук: " .. bestChest.Parent.Name)
+    end
+    
     return bestChest
 end
 
 -- Функция фарма сундуков
 local function startChestFarm()
-    while farmingModules.chests.enabled and task.wait(0.1) do
+    log("Фарм сундуков запущен")
+    while farmingModules.chests.enabled and task.wait(0.2) do  -- Увеличен интервал для оптимизации
         -- Проверка на смерть
         if not LocalPlayer.Character or LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health <= 0 then
+            log("Персонаж мертв, ожидаем возрождения")
             task.wait(2)
             continue
         end
@@ -382,28 +447,36 @@ local function startChestFarm()
             if (LocalPlayer.Character.HumanoidRootPart.Position - bestChest.Position).Magnitude < 10 then
                 firetouchinterest(LocalPlayer.Character.HumanoidRootPart, bestChest, 0)
                 firetouchinterest(LocalPlayer.Character.HumanoidRootPart, bestChest, 1)
+                log("Сундук собран: " .. bestChest.Parent.Name)
+                task.wait(0.5)
             end
         else
-            print("Сундуки не найдены")
+            task.wait(1)
         end
     end
+    log("Фарм сундуков остановлен")
 end
 
 -- Функция для поиска костей
 local function findBone()
     for _, obj in ipairs(workspace:GetDescendants()) do
         if obj.Name:find("Bone") and (obj:IsA("MeshPart") or obj:IsA("Part")) then
+            log("Найдена кость: " .. obj.Name)
             return obj
         end
     end
+    
+    log("Кости не найдены")
     return nil
 end
 
 -- Функция фарма костей
 local function startBonesFarm()
+    log("Фарм костей запущен")
     while farmingModules.bones.enabled and task.wait(0.1) do
         -- Проверка на смерть
         if not LocalPlayer.Character or LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health <= 0 then
+            log("Персонаж мертв, ожидаем возрождения")
             task.wait(2)
             continue
         end
@@ -421,11 +494,14 @@ local function startBonesFarm()
             if (LocalPlayer.Character.HumanoidRootPart.Position - bone.Position).Magnitude < 10 then
                 firetouchinterest(LocalPlayer.Character.HumanoidRootPart, bone, 0)
                 firetouchinterest(LocalPlayer.Character.HumanoidRootPart, bone, 1)
+                log("Кость собрана: " .. bone.Name)
+                task.wait(0.5)
             end
         else
-            print("Кости не найдены")
+            task.wait(1)
         end
     end
+    log("Фарм костей остановлен")
 end
 
 -- Создание меню фарма
@@ -435,11 +511,14 @@ local function createFarmingMenu()
     farmingGui = Instance.new("ScreenGui")
     farmingGui.Name = "FarmingMenuGUI"
     farmingGui.Parent = game:GetService("CoreGui")
+    farmingGui.ResetOnSpawn = false
     
     local mainFrame = Instance.new("Frame")
     mainFrame.Size = UDim2.new(0, 380, 0, 500)
     mainFrame.Position = UDim2.new(0.5, -190, 0.5, -250)
     mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    mainFrame.BackgroundTransparency = 0.1
+    mainFrame.BorderSizePixel = 0
     mainFrame.Active = true
     mainFrame.Draggable = true
     mainFrame.Parent = farmingGui
@@ -469,6 +548,7 @@ local function createFarmingMenu()
         container.Size = UDim2.new(0.9, 0, 0, 70)
         container.Position = UDim2.new(0.05, 0, 0, yPos)
         container.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+        container.BackgroundTransparency = 0.3
         container.Parent = mainFrame
         
         local iconLabel = Instance.new("TextLabel")
@@ -530,36 +610,36 @@ local function createFarmingMenu()
         clickArea.Parent = toggleFrame
         
         clickArea.MouseButton1Click:Connect(function()
+            -- Выключаем все другие модули
+            for key, module in pairs(farmingModules) do
+                if key ~= feature.key and module.enabled then
+                    module.enabled = false
+                    animateToggle(module, key)
+                    if module.thread then
+                        task.cancel(module.thread)
+                        module.thread = nil
+                    end
+                end
+            end
+            
+            -- Включаем/выключаем текущий модуль
             farmingModules[feature.key].enabled = not farmingModules[feature.key].enabled
             animateToggle(farmingModules[feature.key], feature.key)
             
-            if feature.key == "mastery" then
-                if farmingModules.mastery.enabled then
+            if farmingModules[feature.key].enabled then
+                if feature.key == "mastery" then
                     farmingModules.mastery.thread = task.spawn(startMasteryFarm)
-                elseif farmingModules.mastery.thread then
-                    task.cancel(farmingModules.mastery.thread)
-                    farmingModules.mastery.thread = nil
-                end
-            elseif feature.key == "fruits" then
-                if farmingModules.fruits.enabled then
+                elseif feature.key == "fruits" then
                     farmingModules.fruits.thread = task.spawn(startFruitFarm)
-                elseif farmingModules.fruits.thread then
-                    task.cancel(farmingModules.fruits.thread)
-                    farmingModules.fruits.thread = nil
-                end
-            elseif feature.key == "chests" then
-                if farmingModules.chests.enabled then
+                elseif feature.key == "chests" then
                     farmingModules.chests.thread = task.spawn(startChestFarm)
-                elseif farmingModules.chests.thread then
-                    task.cancel(farmingModules.chests.thread)
-                    farmingModules.chests.thread = nil
-                end
-            elseif feature.key == "bones" then
-                if farmingModules.bones.enabled then
+                elseif feature.key == "bones" then
                     farmingModules.bones.thread = task.spawn(startBonesFarm)
-                elseif farmingModules.bones.thread then
-                    task.cancel(farmingModules.bones.thread)
-                    farmingModules.bones.thread = nil
+                end
+            else
+                if farmingModules[feature.key].thread then
+                    task.cancel(farmingModules[feature.key].thread)
+                    farmingModules[feature.key].thread = nil
                 end
             end
         end)
@@ -595,6 +675,7 @@ local function createMobSelectionMenu()
     mobSelectionGui = Instance.new("ScreenGui")
     mobSelectionGui.Name = "MobSelectionGUI"
     mobSelectionGui.Parent = game:GetService("CoreGui")
+    mobSelectionGui.ResetOnSpawn = false
     
     local mainFrame = Instance.new("Frame")
     mainFrame.Size = UDim2.new(0, 380, 0, 500)
@@ -721,7 +802,7 @@ task.spawn(function()
         Icon = "rbxassetid://6726578090",
         Duration = 10
     })
-    print("Фарм-меню готово! Нажмите M для открытия.")
+    log("Фарм-меню готово! Нажмите M для открытия.")
 end)
 
-print("Фарм-скрипт успешно загружен!")
+log("Фарм-скрипт успешно загружен!")
