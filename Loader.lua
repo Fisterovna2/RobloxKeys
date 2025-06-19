@@ -14,16 +14,9 @@ local farmingGui, mobSelectionGui
 local farmingModules = {}
 local modulesByKey = {}
 
--- Утилита: лог
-local function log(msg)
-    print("[BF-FARM] " .. msg)
-end
-
 local success, _ = pcall(function()
     PhysicsService:CreateCollisionGroup("NoclipGroup")
 end)
-
--- даже если уже есть — игнорируем ошибку
 PhysicsService:CollisionGroupSetCollidable("NoclipGroup", "Default", false)
 
 local function enableNoclip()
