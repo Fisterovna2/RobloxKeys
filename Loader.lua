@@ -210,9 +210,11 @@ end
 -- Сервер-хоп (смена сервера)
 local function serverHop()
     local HttpService = game:GetService("HttpService")
-    local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/2753915549/servers/Public?sortOrder=Asc&limit=100"))
+    local response = game:HttpGet("https://games.roblox.com/v1/games/2753915549/servers/Public?sortOrder=Asc&limit=100")
+    local servers = HttpService:JSONDecode(response)
+
     for _, v in pairs(servers.data) do
-        if v.playing < v.maxPlayers then
+        if v.playing < v.maxPlayers and v.id ~= game.JobId then
             game:GetService("TeleportService"):TeleportToPlaceInstance(2753915549, v.id)
             break
         end
