@@ -1,4 +1,4 @@
--- [1] Ожидание полной загрузки игры
+-- [1] Ожидание загрузки игры
 repeat task.wait() until game:IsLoaded()
 
 -- [2] Сервисы
@@ -8,107 +8,148 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
+local PhysicsService = game:GetService("PhysicsService")
+local Workspace = game:GetService("Workspace")
 
 -- [3] Локальные переменные
 local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Modules = {}
-local MainGui
+local BloxHubGui
+local mobSelectionGui
+local toggledMobs = {}
+local farmingModules = {
+	mastery = false,
+	fruits = false,
+	chests = false,
+	bones = false,
+	raids = false
+}
 
--- [4] Утилита логирования
+-- [4] Логирование
 local function log(msg)
-    print("[BLOX-HUB] " .. tostring(msg))
+	print("[BLOX-HUB] " .. tostring(msg))
 end
 
--- [5] Сброс GUI при перезапуске
+-- [5] FPS Boost
+local function applyFpsBoost()
+	settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+	for _, v in pairs(Workspace:GetDescendants()) do
+		if v:IsA("Texture") or v:IsA("ParticleEmitter") or v:IsA("Trail") then
+			v:Destroy()
+		elseif v:IsA("BasePart") then
+			v.Material = Enum.Material.Plastic
+			v.Reflectance = 0
+		end
+	end
+end
+
+-- [6] Телепорт
+local function teleportTo(pos)
+	local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+	if hrp then
+		hrp.CFrame = CFrame.new(pos + Vector3.new(0, 5, 0))
+	end
+end
+
+-- [7] Авто прокачка статов
+local function upgradeStat(stat)
+	local args = { [1] = "AddPoint", [2] = stat, [3] = 1 }
+	ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
+end
+
+-- [8] Store Fruit
+local function storeFruit()
+	local args = {
+		[1] = "StoreFruit",
+		[2] = "FruitName",
+		[3] = LocalPlayer.Name
+	}
+	ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
+end
+
+-- [9] Start Mastery
+local function startMastery()
+	log("Фарм мастерки запущен")
+	while farmingModules.mastery do
+		task.wait(0.2)
+		local enemies = Workspace:GetDescendants()
+		for _, m in ipairs(enemies) do
+			if m:IsA("Model") and m:FindFirstChildOfClass("Humanoid") and m:FindFirstChild("HumanoidRootPart") then
+				if toggledMobs[m.Name] and m:FindFirstChildOfClass("Humanoid").Health > 0 then
+					teleportTo(m.HumanoidRootPart.Position)
+					task.wait(0.5)
+				end
+			end
+		end
+	end
+	log("Фарм мастерки остановлен")
+end
+-- [10] Удаление старого GUI
 pcall(function()
-    if CoreGui:FindFirstChild("BloxHubGui") then
-        CoreGui.BloxHubGui:Destroy()
-    end
+	if CoreGui:FindFirstChild("BloxHubGui") then
+		CoreGui.BloxHubGui:Destroy()
+	end
 end)
 
--- [6] Создание главного GUI-контейнера
-MainGui = Instance.new("ScreenGui", CoreGui)
-MainGui.Name = "BloxHubGui"
-MainGui.ResetOnSpawn = false
+-- [11] Создание GUI
+BloxHubGui = Instance.new("ScreenGui", CoreGui)
+BloxHubGui.Name = "BloxHubGui"
+BloxHubGui.ResetOnSpawn = false
 
--- [7] Главный UI-Frame
-local mainFrame = Instance.new("Frame", MainGui)
+-- [12] Основной фрейм
+local mainFrame = Instance.new("Frame", BloxHubGui)
 mainFrame.Name = "MainFrame"
 mainFrame.Size = UDim2.new(0, 700, 0, 460)
 mainFrame.Position = UDim2.new(0.5, -350, 0.5, -230)
 mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 mainFrame.BorderSizePixel = 0
-mainFrame.Visible = true
 mainFrame.Active = true
 mainFrame.Draggable = true
--- [8] Левая панель навигации
+
+-- [13] Навигационная панель
 local navFrame = Instance.new("Frame", mainFrame)
 navFrame.Name = "NavPanel"
 navFrame.Size = UDim2.new(0, 150, 1, 0)
-navFrame.Position = UDim2.new(0, 0, 0, 0)
 navFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-navFrame.BorderSizePixel = 0
 
--- [9] Контейнер для заголовков
 local navLabel = Instance.new("TextLabel", navFrame)
 navLabel.Size = UDim2.new(1, 0, 0, 50)
 navLabel.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
-navLabel.Text = "🔧 Setting Farm"
+navLabel.Text = "🔧 BloxFarm GUI"
 navLabel.Font = Enum.Font.GothamBold
 navLabel.TextSize = 16
 navLabel.TextColor3 = Color3.fromRGB(0, 255, 255)
-navLabel.BorderSizePixel = 0
 
--- [10] Вкладки навигации
+-- [14] Вкладки
 local tabs = {
-    {Name = "Main", Text = "Main"},
-    {Name = "Sea", Text = "Sea"},
-    {Name = "Items", Text = "Items"},
-    {Name = "Status", Text = "Status"},
-    {Name = "Stats", Text = "Stats"},
-    {Name = "Player", Text = "Player"},
-    {Name = "Teleport", Text = "Teleport"},
-    {Name = "Visual", Text = "Visual"},
+	{ Name = "Main", Text = "Главное" },
+	{ Name = "Sea", Text = "Моря" },
+	{ Name = "Stats", Text = "Статы" },
+	{ Name = "Teleport", Text = "Телепорт" },
+	{ Name = "Visual", Text = "FPS Boost" },
 }
 
 local tabButtons = {}
-local selectedTab = nil
+local createdTabs = {}
+local selectedTab
 
--- [11] Создание кнопок навигации
-for i, tab in ipairs(tabs) do
-    local btn = Instance.new("TextButton", navFrame)
-    btn.Size = UDim2.new(1, 0, 0, 35)
-    btn.Position = UDim2.new(0, 0, 0, 50 + (i - 1) * 36)
-    btn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-    btn.Text = tab.Text
-    btn.Font = Enum.Font.Gotham
-    btn.TextSize = 14
-    btn.TextColor3 = Color3.new(1, 1, 1)
-    btn.BorderSizePixel = 0
-    btn.AutoButtonColor = true
-    tabButtons[tab.Name] = btn
-end
-
--- [12] Контейнер для вкладок справа
+-- [15] Контейнер вкладок
 local tabContainer = Instance.new("Frame", mainFrame)
 tabContainer.Name = "TabContainer"
-tabContainer.Size = UDim2.new(1, -150, 1, 0)
 tabContainer.Position = UDim2.new(0, 150, 0, 0)
+tabContainer.Size = UDim2.new(1, -150, 1, 0)
 tabContainer.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
-tabContainer.BorderSizePixel = 0
--- [13] Функция скрытия всех вкладок
+
+-- [16] Скрытие всех вкладок
 local function hideAllTabs()
-	for _, obj in ipairs(tabContainer:GetChildren()) do
-		if obj:IsA("Frame") then
-			obj.Visible = false
+	for _, tab in pairs(tabContainer:GetChildren()) do
+		if tab:IsA("Frame") then
+			tab.Visible = false
 		end
 	end
 end
 
--- [14] Создание вкладок
-local createdTabs = {}
-
+-- [17] Создание вкладки
 local function createTab(name)
 	if createdTabs[name] then return createdTabs[name] end
 	local tab = Instance.new("Frame", tabContainer)
@@ -120,16 +161,30 @@ local function createTab(name)
 	return tab
 end
 
--- [15] Подключение логики к кнопкам вкладок
-for name, button in pairs(tabButtons) do
-	button.MouseButton1Click:Connect(function()
+-- [18] Кнопки навигации
+for i, tab in ipairs(tabs) do
+	local btn = Instance.new("TextButton", navFrame)
+	btn.Size = UDim2.new(1, 0, 0, 35)
+	btn.Position = UDim2.new(0, 0, 0, 50 + (i - 1) * 36)
+	btn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+	btn.Text = tab.Text
+	btn.Font = Enum.Font.Gotham
+	btn.TextSize = 14
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.BorderSizePixel = 0
+	btn.MouseButton1Click:Connect(function()
 		hideAllTabs()
-		local tab = createTab(name)
-		tab.Visible = true
+		local target = createTab(tab.Name)
+		target.Visible = true
+		selectedTab = target
 	end)
+	tabButtons[tab.Name] = btn
 end
 
--- [16] Вкладка Main с переключателями функций
+-- [19] Сделать первую вкладку активной
+task.wait(0.2)
+tabButtons["Main"]:MouseButton1Click()
+-- [20] Вкладка Main — переключатели функций
 local mainTab = createTab("Main")
 mainTab.Visible = true
 
@@ -138,6 +193,7 @@ local toggleData = {
 	{Label = "🍇 Фрукты", Key = "fruits"},
 	{Label = "💰 Сундуки", Key = "chests"},
 	{Label = "💀 Кости", Key = "bones"},
+	{Label = "🔥 Рейды", Key = "raids"},
 }
 
 local toggleButtons = {}
@@ -146,8 +202,8 @@ for i, item in ipairs(toggleData) do
 	local btn = Instance.new("TextButton", mainTab)
 	btn.Size = UDim2.new(0, 200, 0, 35)
 	btn.Position = UDim2.new(0, 20, 0, 20 + (i - 1) * 45)
-	btn.BackgroundColor3 = Color3.fromRGB(70, 70, 100)
-	btn.Text = item.Label .. " [OFF]"
+	btn.BackgroundColor3 = Color3.fromRGB(170, 0, 0) -- OFF
+	btn.Text = item.Label .. " [ВЫКЛ]"
 	btn.Font = Enum.Font.GothamBold
 	btn.TextSize = 14
 	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -157,24 +213,26 @@ for i, item in ipairs(toggleData) do
 	btn.MouseButton1Click:Connect(function()
 		local state = not farmingModules[item.Key]
 		farmingModules[item.Key] = state
-		btn.Text = item.Label .. (state and " [ON]" or " [OFF]")
+		btn.Text = item.Label .. (state and " [ВКЛ]" or " [ВЫКЛ]")
 		btn.BackgroundColor3 = state and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+
 		if state then
 			task.spawn(function()
 				if item.Key == "mastery" then startMastery() end
 				if item.Key == "fruits" then storeFruit() end
-				-- другие функции можно подключить здесь
+				if item.Key == "raids" then startRaids() end
+				-- остальные функции пока не реализованы
 			end)
 		end
 	end)
 end
--- [17] Вкладка SEA — телепорт по морям
+-- [21] Вкладка Sea — телепорт между морями
 local seaTab = createTab("Sea")
 
 local seaButtons = {
-	{"🌊 Переместиться в 1 Море", Vector3.new(1037, 122, 1421)},
-	{"🌋 Переместиться в 2 Море", Vector3.new(5784, 150, 202)},
-	{"❄️ Переместиться в 3 Море", Vector3.new(-12000, 200, 5100)},
+	{"🌊 Перейти в 1 Море", Vector3.new(1037, 122, 1421)},
+	{"🌋 Перейти в 2 Море", Vector3.new(5784, 150, 202)},
+	{"❄️ Перейти в 3 Море", Vector3.new(-12000, 200, 5100)},
 }
 
 for i, info in ipairs(seaButtons) do
@@ -191,7 +249,7 @@ for i, info in ipairs(seaButtons) do
 	end)
 end
 
--- [18] Вкладка Stats — прокачка статов
+-- [22] Вкладка Stats — прокачка характеристик
 local statsTab = createTab("Stats")
 local stats = {"Melee", "Defense", "Sword", "Gun", "Blox Fruit"}
 for i, name in ipairs(stats) do
@@ -208,11 +266,11 @@ for i, name in ipairs(stats) do
 	end)
 end
 
--- [19] Вкладка Teleport — дополнительные точки
+-- [23] Вкладка Teleport — популярные точки
 local teleportTab = createTab("Teleport")
 
 local locations = {
-	{"🏝️ Spawn", Vector3.new(206, 18, 100)},
+	{"🏝️ Спавн", Vector3.new(206, 18, 100)},
 	{"🏯 Город", Vector3.new(-425, 70, 212)},
 	{"⚔️ Арена", Vector3.new(1450, 80, 750)},
 }
@@ -231,7 +289,7 @@ for i, info in ipairs(locations) do
 	end)
 end
 
--- [20] Вкладка Visual — FPS буст
+-- [24] Вкладка Visual — FPS Boost
 local visualTab = createTab("Visual")
 local btn = Instance.new("TextButton", visualTab)
 btn.Size = UDim2.new(0, 200, 0, 35)
@@ -244,11 +302,11 @@ btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 btn.MouseButton1Click:Connect(function()
 	applyFpsBoost()
 end)
--- [21] Вкладка выбора мобов (по клавише N)
+-- [25] Вкладка выбора мобов (по клавише N)
 function createMobSelectionMenu()
 	if mobSelectionGui then mobSelectionGui:Destroy() end
 
-	mobSelectionGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
+	mobSelectionGui = Instance.new("ScreenGui", CoreGui)
 	mobSelectionGui.Name = "MobSelection"
 
 	local frm = Instance.new("Frame", mobSelectionGui)
@@ -266,7 +324,7 @@ function createMobSelectionMenu()
 	title.Font = Enum.Font.GothamBold
 	title.TextSize = 18
 
-	-- Scrollable список
+	-- Прокручиваемый список
 	local scroll = Instance.new("ScrollingFrame", frm)
 	scroll.Size = UDim2.new(1, -20, 1, -80)
 	scroll.Position = UDim2.new(0, 10, 0, 50)
@@ -282,11 +340,9 @@ function createMobSelectionMenu()
 		-- 1 МОРЕ
 		"Bandit", "Monkey", "Pirate", "Brute", "Desert Bandit", "Desert Officer", "Snow Bandit",
 		"Yeti", "Dark Master", "Sky Bandit", "Sky Warrior", "Thunder God", "Galley Pirate", "Galley Captain",
-
 		-- 2 МОРЕ
 		"Raider", "Mercenary", "Swan Pirate", "Factory Staff", "Marine Captain", "Chief Petty Officer",
 		"God's Guard", "Shanda", "Royal Squad", "Royal Soldier", "Zombie", "Vampire", "Ghost Ship Crew",
-
 		-- 3 МОРЕ
 		"Arctic Warrior", "Island Empress", "Reborn Skeleton", "Water Fighter", "Fishman Raider",
 		"Fishman Captain", "Sea Soldier", "Mythological Pirate", "Dragon Crew Warrior", "Elite Pirate"
@@ -336,16 +392,13 @@ function createMobSelectionMenu()
 		mobSelectionGui:Destroy()
 	end
 end
--- [22] Кнопки M/N — открытие меню
+
+-- [26] Назначение клавиш M и N
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 
 	if input.KeyCode == Enum.KeyCode.M then
-		if farmingGui and farmingGui.Parent then
-			farmingGui.Enabled = not farmingGui.Enabled
-		else
-			createMenu()
-		end
+		mainFrame.Visible = not mainFrame.Visible
 	elseif input.KeyCode == Enum.KeyCode.N then
 		if mobSelectionGui and mobSelectionGui.Parent then
 			mobSelectionGui.Enabled = not mobSelectionGui.Enabled
@@ -355,97 +408,16 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
--- [23] Уведомление при загрузке
+-- [27] Уведомление о запуске
 task.spawn(function()
-	task.wait(3)
+	task.wait(2)
 	pcall(function()
 		game.StarterGui:SetCore("SendNotification", {
-			Title = "📦 Blox Fruits АвтоФарм",
-			Text = "Нажмите M — Меню | N — Мобы",
-			Icon = "rbxassetid://6726578090",
-			Duration = 6
+			Title = "⚙️ Blox Fruits GUI",
+			Text = "Нажмите M — Меню, N — Мобы",
+			Duration = 6,
+			Icon = "rbxassetid://6726578090"
 		})
 	end)
-	log("Фарм-меню загружено.")
+	log("GUI успешно запущен.")
 end)
--- Авто Рейды (Доработанная реализация с выбором и ожиданием)
-local function startRaids()
-	log("Авто-рейды активированы")
-	while farmingModules.raids do
-		task.wait(3)
-
-		local raidTable = Workspace:FindFirstChild("RaidSummon")
-		local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-
-		if raidTable and hrp then
-			-- Телепорт к столу рейдов
-			teleportTo(raidTable.Position)
-			task.wait(1)
-
-			-- Подбор типа рейда (по умолчанию Flame)
-			local raidType = "Flame"  -- Можно будет выбрать через GUI позже
-			log("Выбор рейда: " .. raidType)
-
-			local args = {
-				[1] = "RaidsNpc",
-				[2] = "Select",
-				[3] = raidType
-			}
-			ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
-			task.wait(0.5)
-
-			local startArgs = {
-				[1] = "RaidsNpc",
-				[2] = "Start"
-			}
-			ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(startArgs))
-
-			log("Рейд запущен. Ожидаем окончания...")
-
-			repeat
-				task.wait(5)
-			until not farmingModules.raids or not Workspace:FindFirstChild("Enemies")
-
-			log("Рейд завершён или остановлен. Пауза перед новым циклом...")
-			task.wait(10)
-		else
-			log("⚠️ Стол рейдов не найден или персонаж не готов")
-			task.wait(5)
-		end
-	end
-	log("Авто-рейды отключены")
-end
--- Добавляем рейды в список включаемых модулей
-farmingModules = {
-    mastery = false,
-    fruits = false,
-    chests = false,
-    bones = false,
-    raids = false -- 🆕 рейды
-}
-
--- Обновим список функций с рейдами
-local features = {
-    {"ФАРМ МАСТЕРИ", "mastery", startMastery},
-    {"ФРУКТЫ", "fruits", storeFruit},
-    {"СУНДУКИ", "chests", function() log("Нужна реализация") end},
-    {"КОСТИ", "bones", function() log("Нужна реализация") end},
-    {"🔥 РЕЙДЫ", "raids", startRaids} -- 🆕 рейды
-}
-for i, feat in ipairs(features) do
-    local btn = Instance.new("TextButton", frm)
-    btn.Size = UDim2.new(0.9, 0, 0, 35)
-    btn.Position = UDim2.new(0.05, 0, 0, 45 + (i - 1) * 40)
-    btn.BackgroundColor3 = Color3.fromRGB(170, 0, 0) -- красный по умолчанию
-    btn.Text = feat[1] .. " [ВЫКЛ]"
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 14
-    btn.TextColor3 = Color3.new(1, 1, 1)
-
-    btn.MouseButton1Click:Connect(function()
-        toggleModule(feat[2], feat[3])
-        local isActive = farmingModules[feat[2]]
-        btn.Text = feat[1] .. (isActive and " [ВКЛ]" or " [ВЫКЛ]")
-        btn.BackgroundColor3 = isActive and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
-    end)
-end
