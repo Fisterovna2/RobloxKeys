@@ -4,428 +4,513 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local PhysicsService = game:GetService("PhysicsService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CoreGui = game:GetService("CoreGui")
 
-local farmingGui, mobSelectionGui
-local farmingModules = {}
-local modulesByKey = {}
-
-local noclipExists = false
-for _, name in ipairs(PhysicsService:GetCollisionGroups()) do
-    if name.name == "NoclipGroup" then
-        noclipExists = true
-        break
-    end
+-- Очистим предыдущие GUI
+if CoreGui:FindFirstChild("HyperFarmUI") then
+    CoreGui:FindFirstChild("HyperFarmUI"):Destroy()
 end
 
-if not noclipExists then
-    pcall(function()
-        PhysicsService:CreateCollisionGroup("NoclipGroup")
+-- Создаём ScreenGui
+local gui = Instance.new("ScreenGui")
+gui.Name = "HyperFarmUI"
+gui.Parent = CoreGui
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.ResetOnSpawn = false
+
+-- Основной фрейм
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 700, 0, 450)
+mainFrame.Position = UDim2.new(0.5, -350, 0.5, -225)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 35, 45)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = gui
+mainFrame.Active = true
+mainFrame.Draggable = true
+
+-- Заголовок
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+title.Text = "☠ Hyper Blox Fruits — Ultimate Farm GUI"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+title.Parent = mainFrame
+
+-- Левая панель (навигация)
+local navPanel = Instance.new("Frame")
+navPanel.Size = UDim2.new(0, 150, 1, -40)
+navPanel.Position = UDim2.new(0, 0, 0, 40)
+navPanel.BackgroundColor3 = Color3.fromRGB(35, 40, 50)
+navPanel.Parent = mainFrame
+
+-- Правая панель (контент)
+local contentPanel = Instance.new("Frame")
+contentPanel.Size = UDim2.new(1, -150, 1, -40)
+contentPanel.Position = UDim2.new(0, 150, 0, 40)
+contentPanel.BackgroundColor3 = Color3.fromRGB(40, 45, 60)
+contentPanel.Name = "ContentPanel"
+contentPanel.ClipsDescendants = true
+contentPanel.Parent = mainFrame
+
+-- Функция для создания кнопок навигации
+local function createNavButton(name, text, order)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Size = UDim2.new(1, 0, 0, 35)
+    btn.Position = UDim2.new(0, 0, 0, (order - 1) * 36)
+    btn.Text = text
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.BackgroundColor3 = Color3.fromRGB(45, 50, 65)
+    btn.BorderSizePixel = 0
+    btn.AutoButtonColor = true
+    btn.Parent = navPanel
+    return btn
+end
+
+-- Таб-лист
+local tabNames = { "Main", "Sea", "Stats", "Teleport", "Visual" }
+local tabButtons = {}
+for i, name in ipairs(tabNames) do
+    tabButtons[name] = createNavButton(name, name, i)
+end
+-- Текущая активная вкладка
+local currentTab = nil
+local tabFrames = {}
+
+-- Функция переключения вкладок
+local function switchTab(tabName)
+    for name, frame in pairs(tabFrames) do
+        frame.Visible = (name == tabName)
+    end
+    currentTab = tabName
+end
+
+-- Создание вкладки
+local function createTab(name)
+    local tab = Instance.new("Frame")
+    tab.Name = name
+    tab.Size = UDim2.new(1, 0, 1, 0)
+    tab.BackgroundTransparency = 1
+    tab.Visible = false
+    tab.Parent = contentPanel
+    tabFrames[name] = tab
+    return tab
+end
+
+-- Привязка кнопок
+for name, btn in pairs(tabButtons) do
+    btn.MouseButton1Click:Connect(function()
+        switchTab(name)
     end)
 end
 
-pcall(function()
-    PhysicsService:CollisionGroupSetCollidable("NoclipGroup", "Default", false)
+-- Активировать первую вкладку
+switchTab("Main")
+
+-----------------------------------------------------------------------
+-- 🌟 MAIN TAB
+-----------------------------------------------------------------------
+local mainTab = createTab("Main")
+
+-- Название секции
+local sectionTitle = Instance.new("TextLabel", mainTab)
+sectionTitle.Size = UDim2.new(1, -20, 0, 30)
+sectionTitle.Position = UDim2.new(0, 10, 0, 10)
+sectionTitle.Text = "Mastery Farming"
+sectionTitle.TextColor3 = Color3.new(1, 1, 1)
+sectionTitle.TextXAlignment = Enum.TextXAlignment.Left
+sectionTitle.Font = Enum.Font.GothamBold
+sectionTitle.TextSize = 16
+sectionTitle.BackgroundTransparency = 1
+
+-- Компонент переключателя
+local function createToggle(name, yOffset, defaultState, callback)
+    local holder = Instance.new("Frame", mainTab)
+    holder.Size = UDim2.new(1, -20, 0, 40)
+    holder.Position = UDim2.new(0, 10, 0, yOffset)
+    holder.BackgroundTransparency = 1
+
+    local label = Instance.new("TextLabel", holder)
+    label.Size = UDim2.new(0.7, 0, 1, 0)
+    label.Text = name
+    label.TextColor3 = Color3.new(1,1,1)
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 14
+    label.BackgroundTransparency = 1
+
+    local toggle = Instance.new("TextButton", holder)
+    toggle.Size = UDim2.new(0.25, 0, 0.7, 0)
+    toggle.Position = UDim2.new(0.75, 0, 0.15, 0)
+    toggle.Text = defaultState and "ON" or "OFF"
+    toggle.Font = Enum.Font.GothamBold
+    toggle.TextSize = 12
+    toggle.TextColor3 = Color3.new(1,1,1)
+    toggle.BackgroundColor3 = defaultState and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+
+    local state = defaultState
+
+    toggle.MouseButton1Click:Connect(function()
+        state = not state
+        toggle.Text = state and "ON" or "OFF"
+        toggle.BackgroundColor3 = state and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+        if callback then callback(state) end
+    end)
+
+    return toggle
+end
+
+-- Функция-переключатели
+createToggle("Auto Farm Mastery", 50, false, function(state)
+    farmingModules.mastery = state
+    if state then
+        task.spawn(startMastery)
+    end
 end)
 
-local function log(msg)
-    print("[BF-FARM] " .. msg)
-end
-
-local function enableNoclip()
-    local char = LocalPlayer.Character
-    if not char then return end
-    for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            PhysicsService:SetPartCollisionGroup(part, "NoclipGroup")
-            part.CanCollide = false
-        end
-    end
-end
-
-local function flyTo(pos, yOffset)
-    local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return math.huge end
-    local root = char.HumanoidRootPart
-    local target = pos + Vector3.new(0, yOffset or 15, 0)
-    local dir = (target - root.Position).Unit
-    root.AssemblyLinearVelocity = dir * 150
-    return (target - root.Position).Magnitude
-end
-local function attackEnemy(enemy)
-    local bp = LocalPlayer.Backpack
-    local char = LocalPlayer.Character
-    local sword, gun
-    for _, tool in ipairs(bp:GetChildren()) do
-        if tool:IsA("Tool") then
-            if tool.Name:find("Sword") or tool.Name:find("Melee") then
-                sword = tool
-            elseif tool.Name:find("Gun") then
-                gun = tool
+createToggle("Auto Store Fruits", 95, false, function(state)
+    farmingModules.fruits = state
+    if state then
+        task.spawn(function()
+            while farmingModules.fruits do
+                storeFruit()
+                task.wait(10)
             end
-        end
-    end
-    if sword then
-        sword.Parent = char
-        for i=1,3 do sword:Activate(); task.wait(0.1) end
-    elseif gun then
-        gun.Parent = char
-        for i=1,3 do gun:Activate(); task.wait(0.1) end
-    else
-        VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,false)
-        task.wait(0.05)
-        VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,false)
-    end
-end
-
-local function findEnemies()
-    local found = {}
-    for _, m in ipairs(Workspace:GetDescendants()) do
-        if m:IsA("Model") and m:FindFirstChildOfClass("Humanoid") and m:FindFirstChild("HumanoidRootPart") then
-            local h = m:FindFirstChildOfClass("Humanoid")
-            if h.Health > 0 then table.insert(found, m) end
-        end
-    end
-    return found
-end
-
-local function getNearestEnemy()
-    local nearest, minDist = nil, 1e9
-    local myPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not myPos then return nil end
-    myPos = myPos.Position
-    for _, mob in ipairs(findEnemies()) do
-        local dist = (mob.HumanoidRootPart.Position - myPos).Magnitude
-        if dist < minDist then
-            minDist = dist
-            nearest = mob
-        end
-    end
-    return nearest
-end
-local function startMastery()
-    log("Фарм мастерки запущен")
-    while farmingModules.mastery do
-        task.wait(0.2)
-        enableNoclip()
-        local enemy = getNearestEnemy()
-        if enemy then
-            local d = flyTo(enemy.HumanoidRootPart.Position)
-            if d < 100 then
-                while farmingModules.mastery and enemy do
-                    if enemy:FindFirstChildOfClass("Humanoid") and enemy.Humanoid.Health > 0 then
-                        attackEnemy(enemy)
-                    else
-                        break
-                    end
-                    task.wait(0.2)
-                end
-            end
-        end
-    end
-    log("Фарм мастерки остановлен")
-end
-
-local function enableHaki()
-    local args = { [1] = "Buso" }
-    ReplicatedStorage.Remotes.Comm:InvokeServer(unpack(args))
-    wait(0.5)
-    local args2 = { [1] = "Ken" }
-    ReplicatedStorage.Remotes.Comm:InvokeServer(unpack(args2))
-end
-
-local function autoEquip()
-    local backpack = LocalPlayer.Backpack
-    for _, tool in ipairs(backpack:GetChildren()) do
-        if tool:IsA("Tool") and (tool.Name:find("Sword") or tool.Name:find("Gun") or tool.Name:find("Melee")) then
-            tool.Parent = LocalPlayer.Character
-            break
-        end
-    end
-end
-
-LocalPlayer.CharacterAdded:Connect(function(char)
-    task.wait(1)
-    if farmingModules.mastery then
-        log("Респаун: продолжаем фарм")
-        autoEquip()
-        enableHaki()
+        end)
     end
 end)
 
-local vu = game:GetService("VirtualUser")
-LocalPlayer.Idled:Connect(function()
-    vu:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
-    task.wait(1)
-    vu:Button2Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+createToggle("Auto Collect Chests", 140, false, function(state)
+    farmingModules.chests = state
+    -- TODO: реализовать
 end)
-local function applyFpsBoost()
-    settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-    for _, v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("Texture") or v:IsA("ParticleEmitter") or v:IsA("Trail") then
-            v:Destroy()
-        elseif v:IsA("BasePart") then
-            v.Material = Enum.Material.Plastic
-            v.Reflectance = 0
-        end
-    end
+
+createToggle("Auto Collect Bones", 185, false, function(state)
+    farmingModules.bones = state
+    -- TODO: реализовать
+end)
+-----------------------------------------------------------------------
+-- 🌊 SEA TAB
+-----------------------------------------------------------------------
+local seaTab = createTab("Sea")
+
+-- Заголовок
+local title = Instance.new("TextLabel", seaTab)
+title.Size = UDim2.new(1, -20, 0, 30)
+title.Position = UDim2.new(0, 10, 0, 10)
+title.Text = "Teleport Zones & Seas"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.BackgroundTransparency = 1
+
+-- Кнопка телепорта в море
+local function createSeaButton(name, seaPos, yOffset)
+    local btn = Instance.new("TextButton", seaTab)
+    btn.Size = UDim2.new(0.9, 0, 0, 35)
+    btn.Position = UDim2.new(0.05, 0, 0, yOffset)
+    btn.Text = name
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.BackgroundColor3 = Color3.fromRGB(60, 100, 130)
+
+    btn.MouseButton1Click:Connect(function()
+        teleportTo(seaPos)
+    end)
 end
 
-local function storeFruit()
-    local args = {
-        [1] = "StoreFruit",
-        [2] = "FruitName",
-        [3] = LocalPlayer.Name
-    }
-    ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
-end
+-- Примерные координаты (замени при необходимости на реальные)
+createSeaButton("🌊 Первая Море", Vector3.new(0, 10, 0), 50)
+createSeaButton("🌌 Второе Море", Vector3.new(1000, 10, 0), 90)
+createSeaButton("🌌 Третье Море", Vector3.new(2000, 10, 0), 130)
 
-local function buyGacha()
-    local args = { [1] = "Cousin", [2] = "Buy" }
-    ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
-end
+-----------------------------------------------------------------------
+-- 👾 МЕНЮ МОБОВ (scrollable)
+-----------------------------------------------------------------------
+local mobGui = createTab("Mobs")
 
-local function buyFruit(name)
-    local args = { [1] = "BuyFruit", [2] = name }
-    ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
-end
+local titleMobs = Instance.new("TextLabel", mobGui)
+titleMobs.Size = UDim2.new(1, -20, 0, 30)
+titleMobs.Position = UDim2.new(0, 10, 0, 10)
+titleMobs.Text = "Список всех мобов"
+titleMobs.TextColor3 = Color3.new(1, 1, 1)
+titleMobs.Font = Enum.Font.GothamBold
+titleMobs.TextSize = 16
+titleMobs.TextXAlignment = Enum.TextXAlignment.Left
+titleMobs.BackgroundTransparency = 1
 
-local function upgradeStat(stat)
-    local args = { [1] = "AddPoint", [2] = stat, [3] = 1 }
-    ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
-end
+local scrollingFrame = Instance.new("ScrollingFrame", mobGui)
+scrollingFrame.Position = UDim2.new(0.05, 0, 0, 50)
+scrollingFrame.Size = UDim2.new(0.9, 0, 1, -60)
+scrollingFrame.CanvasSize = UDim2.new(0, 0, 5, 0)
+scrollingFrame.ScrollBarThickness = 8
+scrollingFrame.BackgroundColor3 = Color3.fromRGB(30,30,40)
+scrollingFrame.BorderSizePixel = 0
 
-local function upgradeKenHaki()
-    local args = { [1] = "UpgradeKenTalk" }
-    ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
-end
+local allMobs = {
+    -- 🌍 First Sea
+    "Bandit", "Monkey", "Gorilla", "Pirate", "Brute",
+    "Desert Bandit", "Desert Officer", "Snow Bandit", "Snowman",
+    "Chief Petty Officer", "Yeti", "Dark Master", "Sky Bandit",
+    "Royal Squad", "Royal Soldier", "Galley Pirate", "Galley Captain",
 
-local function teleportTo(pos)
-    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        hrp.CFrame = CFrame.new(pos + Vector3.new(0,5,0))
-    end
-end
+    -- 🌌 Second Sea
+    "Raider", "Mercenary", "Swan Pirate", "Factory Staff",
+    "Marine Captain", "Zombie", "Vampire", "Ship Engineer",
 
-local function serverHop()
-    local HttpService = game:GetService("HttpService")
-    local response = game:HttpGet("https://games.roblox.com/v1/games/2753915549/servers/Public?sortOrder=Asc&limit=100")
-    local servers = HttpService:JSONDecode(response)
-    for _, v in pairs(servers.data) do
-        if v.playing < v.maxPlayers and v.id ~= game.JobId then
-            game:GetService("TeleportService"):TeleportToPlaceInstance(2753915549, v.id)
-            break
-        end
-    end
-end
-farmingModules = {
-    mastery = false,
-    fruits = false,
-    chests = false,
-    bones = false,
+    -- 🌠 Third Sea
+    "Elite Pirate", "Arctic Warrior", "Living Zombie", "Fishman Raider",
+    "Forest Pirate", "Captain Elephant", "Island Empress",
+    "Forest Beast", "Sea Soldier", "Water Fighter", "Dragon Crew Archer",
+    "Dragon Crew Warrior"
 }
 
-local function toggleModule(name, func, button)
-    farmingModules[name] = not farmingModules[name]
-    if button then
-        button.Text = farmingModules[name] and "ОТКЛ" or "ВКЛ"
-        button.BackgroundColor3 = farmingModules[name] and Color3.fromRGB(180, 50, 50) or Color3.fromRGB(0, 170, 0)
-    end
-    if farmingModules[name] then
-        log("Включен: " .. name)
-        task.spawn(func)
-    else
-        log("Отключен: " .. name)
-    end
+-- Создание списка
+for i, mobName in ipairs(allMobs) do
+    local mobLabel = Instance.new("TextLabel", scrollingFrame)
+    mobLabel.Size = UDim2.new(1, -10, 0, 25)
+    mobLabel.Position = UDim2.new(0, 5, 0, (i - 1) * 30)
+    mobLabel.Text = mobName
+    mobLabel.TextColor3 = Color3.new(1, 1, 1)
+    mobLabel.Font = Enum.Font.Gotham
+    mobLabel.TextSize = 14
+    mobLabel.BackgroundTransparency = 1
+end
+-----------------------------------------------------------------------
+-- 📈 STATS TAB (прокачка характеристик)
+-----------------------------------------------------------------------
+local statsTab = createTab("Stats")
+
+local statNames = { "Melee", "Defense", "Sword", "Gun", "Blox Fruit" }
+
+for i, stat in ipairs(statNames) do
+    local btn = Instance.new("TextButton", statsTab)
+    btn.Size = UDim2.new(0.9, 0, 0, 35)
+    btn.Position = UDim2.new(0.05, 0, 0, 10 + (i-1) * 40)
+    btn.Text = "Прокачать " .. stat
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.BackgroundColor3 = Color3.fromRGB(50, 100, 60)
+
+    btn.MouseButton1Click:Connect(function()
+        upgradeStat(stat)
+    end)
 end
 
-function createMenu()
+-----------------------------------------------------------------------
+-- 🚀 TELEPORT TAB
+-----------------------------------------------------------------------
+local teleportTab = createTab("Teleport")
+
+local teleportSpots = {
+    {name = "Начальная зона", pos = Vector3.new(0, 10, 0)},
+    {name = "Sky Island", pos = Vector3.new(500, 200, 100)},
+    {name = "Marine Fortress", pos = Vector3.new(-400, 20, -100)},
+    {name = "Middle Town", pos = Vector3.new(100, 20, 300)},
+    {name = "Jungle", pos = Vector3.new(-200, 20, 400)},
+    {name = "Pirate Village", pos = Vector3.new(300, 20, -200)},
+}
+
+for i, tp in ipairs(teleportSpots) do
+    local btn = Instance.new("TextButton", teleportTab)
+    btn.Size = UDim2.new(0.9, 0, 0, 35)
+    btn.Position = UDim2.new(0.05, 0, 0, 10 + (i-1) * 40)
+    btn.Text = tp.name
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.BackgroundColor3 = Color3.fromRGB(90, 70, 140)
+
+    btn.MouseButton1Click:Connect(function()
+        teleportTo(tp.pos)
+    end)
+end
+-----------------------------------------------------------------------
+-- 👁️ VISUAL TAB (FPS Boost, удаление эффектов)
+-----------------------------------------------------------------------
+local visualTab = createTab("Visual")
+
+local btnFps = Instance.new("TextButton", visualTab)
+btnFps.Size = UDim2.new(0.9, 0, 0, 35)
+btnFps.Position = UDim2.new(0.05, 0, 0, 10)
+btnFps.Text = "FPS Boost (Удалить эффекты)"
+btnFps.Font = Enum.Font.GothamBold
+btnFps.TextSize = 14
+btnFps.TextColor3 = Color3.new(1, 1, 1)
+btnFps.BackgroundColor3 = Color3.fromRGB(120, 120, 40)
+
+btnFps.MouseButton1Click:Connect(function()
+    applyFpsBoost()
+    log("FPS Boost активирован")
+end)
+
+-----------------------------------------------------------------------
+-- 🍍 ITEMS TAB (фрукты, гача и хранилище)
+-----------------------------------------------------------------------
+local itemsTab = createTab("Items")
+
+local btnStoreFruit = Instance.new("TextButton", itemsTab)
+btnStoreFruit.Size = UDim2.new(0.9, 0, 0, 35)
+btnStoreFruit.Position = UDim2.new(0.05, 0, 0, 10)
+btnStoreFruit.Text = "📦 Сохранить фрукт"
+btnStoreFruit.Font = Enum.Font.GothamBold
+btnStoreFruit.TextSize = 14
+btnStoreFruit.TextColor3 = Color3.new(1, 1, 1)
+btnStoreFruit.BackgroundColor3 = Color3.fromRGB(70, 130, 100)
+btnStoreFruit.MouseButton1Click:Connect(storeFruit)
+
+local btnGacha = Instance.new("TextButton", itemsTab)
+btnGacha.Size = UDim2.new(0.9, 0, 0, 35)
+btnGacha.Position = UDim2.new(0.05, 0, 0, 55)
+btnGacha.Text = "🎲 Гача (рандом фрукт)"
+btnGacha.Font = Enum.Font.GothamBold
+btnGacha.TextSize = 14
+btnGacha.TextColor3 = Color3.new(1, 1, 1)
+btnGacha.BackgroundColor3 = Color3.fromRGB(100, 80, 150)
+btnGacha.MouseButton1Click:Connect(buyGacha)
+
+-- Пример кнопки на покупку конкретного фрукта:
+local btnBuyFlame = Instance.new("TextButton", itemsTab)
+btnBuyFlame.Size = UDim2.new(0.9, 0, 0, 35)
+btnBuyFlame.Position = UDim2.new(0.05, 0, 0, 100)
+btnBuyFlame.Text = "🔥 Купить Flame Fruit"
+btnBuyFlame.Font = Enum.Font.GothamBold
+btnBuyFlame.TextSize = 14
+btnBuyFlame.TextColor3 = Color3.new(1, 1, 1)
+btnBuyFlame.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
+btnBuyFlame.MouseButton1Click:Connect(function()
+    buyFruit("Flame-Flame")
+end)
+-----------------------------------------------------------------------
+-- 🌀 RAIDS TAB
+-----------------------------------------------------------------------
+local raidsTab = createTab("Raids")
+
+local btnRaidFarm = Instance.new("TextButton", raidsTab)
+btnRaidFarm.Size = UDim2.new(0.9, 0, 0, 35)
+btnRaidFarm.Position = UDim2.new(0.05, 0, 0, 10)
+btnRaidFarm.Text = "🔥 Фарм Рейдов (заглушка)"
+btnRaidFarm.Font = Enum.Font.GothamBold
+btnRaidFarm.TextSize = 14
+btnRaidFarm.TextColor3 = Color3.new(1, 1, 1)
+btnRaidFarm.BackgroundColor3 = Color3.fromRGB(140, 60, 120)
+btnRaidFarm.MouseButton1Click:Connect(function()
+    log("Рейды еще не реализованы. Обновление позже.")
+end)
+
+-----------------------------------------------------------------------
+-- 🎉 EVENTS TAB
+-----------------------------------------------------------------------
+local eventsTab = createTab("Events")
+
+local btnBones = Instance.new("TextButton", eventsTab)
+btnBones.Size = UDim2.new(0.9, 0, 0, 35)
+btnBones.Position = UDim2.new(0.05, 0, 0, 10)
+btnBones.Text = "💀 Фарм Костей (заглушка)"
+btnBones.Font = Enum.Font.GothamBold
+btnBones.TextSize = 14
+btnBones.TextColor3 = Color3.new(1, 1, 1)
+btnBones.BackgroundColor3 = Color3.fromRGB(110, 70, 90)
+btnBones.MouseButton1Click:Connect(function()
+    log("Фарм костей скоро будет добавлен.")
+end)
+
+local btnSeaEvent = Instance.new("TextButton", eventsTab)
+btnSeaEvent.Size = UDim2.new(0.9, 0, 0, 35)
+btnSeaEvent.Position = UDim2.new(0.05, 0, 0, 55)
+btnSeaEvent.Text = "🌊 Sea Event (заглушка)"
+btnSeaEvent.Font = Enum.Font.GothamBold
+btnSeaEvent.TextSize = 14
+btnSeaEvent.TextColor3 = Color3.new(1, 1, 1)
+btnSeaEvent.BackgroundColor3 = Color3.fromRGB(90, 60, 120)
+btnSeaEvent.MouseButton1Click:Connect(function()
+    log("Sea Events еще в разработке.")
+end)
+-- Создание основного окна с вкладками
+function createAdvancedMenu()
     if farmingGui then farmingGui:Destroy() end
     farmingGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
-    farmingGui.Name = "FarmingMenu"
+    farmingGui.Name = "FarmingHubV2"
 
-    local frm = Instance.new("Frame", farmingGui)
-    frm.Size = UDim2.new(0, 300, 0, 350)
-    frm.Position = UDim2.new(0.5, -150, 0.5, -175)
-    frm.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    frm.Active = true
-    frm.Draggable = true
+    local mainFrame = Instance.new("Frame", farmingGui)
+    mainFrame.Size = UDim2.new(0, 600, 0, 450)
+    mainFrame.Position = UDim2.new(0.5, -300, 0.5, -225)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    mainFrame.Active = true
+    mainFrame.Draggable = true
+    mainFrame.Name = "MainFrame"
 
-    local title = Instance.new("TextLabel", frm)
-    title.Size = UDim2.new(1, 0, 0, 40)
-    title.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-    title.Text = "⚙️ Blox Fruits Фарм Меню"
-    title.TextColor3 = Color3.fromRGB(0, 255, 255)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 18
+    local sideBar = Instance.new("Frame", mainFrame)
+    sideBar.Size = UDim2.new(0, 120, 1, 0)
+    sideBar.Position = UDim2.new(0, 0, 0, 0)
+    sideBar.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 
-    local features = {
-        {"ФАРМ МАСТЕРИ", "mastery", startMastery},
-        {"ФРУКТЫ", "fruits", storeFruit},
-        {"СУНДУКИ", "chests", function() log("Нужна реализация") end},
-        {"КОСТИ", "bones", function() log("Нужна реализация") end},
-    }
+    local contentFrame = Instance.new("Frame", mainFrame)
+    contentFrame.Size = UDim2.new(1, -120, 1, 0)
+    contentFrame.Position = UDim2.new(0, 120, 0, 0)
+    contentFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    contentFrame.Name = "Content"
 
-    for i, feat in ipairs(features) do
-        local btn = Instance.new("TextButton", frm)
-        btn.Size = UDim2.new(0.9, 0, 0, 35)
-        btn.Position = UDim2.new(0.05, 0, 0, 45 + (i-1)*40)
-        btn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-        btn.Text = "ВКЛ"
-        btn.Font = Enum.Font.GothamBold
-        btn.TextSize = 14
-        btn.TextColor3 = Color3.new(1, 1, 1)
-        btn.MouseButton1Click:Connect(function()
-            toggleModule(feat[2], feat[3], btn)
-        end)
-
-        local lbl = Instance.new("TextLabel", btn)
-        lbl.Size = UDim2.new(1, 0, 1, 0)
-        lbl.Position = UDim2.new(0, 0, 0, 0)
-        lbl.BackgroundTransparency = 1
-        lbl.Text = feat[1]
-        lbl.Font = Enum.Font.GothamBold
-        lbl.TextSize = 14
-        lbl.TextColor3 = Color3.new(1, 1, 1)
-    end
-    local mobBtn = Instance.new("TextButton", frm)
-    mobBtn.Size = UDim2.new(0.9, 0, 0, 35)
-    mobBtn.Position = UDim2.new(0.05, 0, 1, -80)
-    mobBtn.Text = "👾 МОБЫ (N)"
-    mobBtn.Font = Enum.Font.GothamBold
-    mobBtn.TextSize = 14
-    mobBtn.TextColor3 = Color3.new(1,1,1)
-    mobBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 120)
-    mobBtn.MouseButton1Click = function()
-        if mobSelectionGui then
-            mobSelectionGui.Enabled = not mobSelectionGui.Enabled
-        else
-            createMobSelectionMenu()
+    local tabs = {}
+    local function switchTab(tabName)
+        for name, frame in pairs(tabs) do
+            frame.Visible = (name == tabName)
         end
     end
 
-    local closeBtn = Instance.new("TextButton", frm)
-    closeBtn.Size = UDim2.new(0.9, 0, 0, 35)
-    closeBtn.Position = UDim2.new(0.05, 0, 1, -40)
-    closeBtn.Text = "❌ ЗАКРЫТЬ"
-    closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.TextSize = 14
-    closeBtn.TextColor3 = Color3.new(1,1,1)
-    closeBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-    closeBtn.MouseButton1Click = function()
-        farmingGui:Destroy()
-        farmingGui = nil
+    function createTab(name)
+        local btn = Instance.new("TextButton", sideBar)
+        btn.Size = UDim2.new(1, 0, 0, 40)
+        btn.Position = UDim2.new(0, 0, 0, (#sideBar:GetChildren()-1) * 40)
+        btn.Text = name
+        btn.Font = Enum.Font.GothamBold
+        btn.TextColor3 = Color3.new(1,1,1)
+        btn.TextSize = 14
+        btn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+        btn.AutoButtonColor = false
+
+        local tab = Instance.new("ScrollingFrame", contentFrame)
+        tab.Size = UDim2.new(1, 0, 1, 0)
+        tab.CanvasSize = UDim2.new(0, 0, 2, 0)
+        tab.ScrollBarThickness = 6
+        tab.BackgroundTransparency = 1
+        tab.Visible = false
+        tab.Name = name
+        tab.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        tab.ScrollingDirection = Enum.ScrollingDirection.Y
+
+        btn.MouseButton1Click:Connect(function()
+            switchTab(name)
+        end)
+
+        tabs[name] = tab
+        if #sideBar:GetChildren() == 2 then tab.Visible = true end
+        return tab
     end
+
+    -- Вызываем генерацию вкладок (это то, что ты видел в прошлых частях)
+    -- Например:
+    -- local mainTab = createTab("Main")
+    -- local statsTab = createTab("Stats")
+    -- ... (остальные Tabs)
 end
 
-UserInputService.InputBegan:Connect(function(inp, gpe)
-    if gpe then return end
-    if inp.KeyCode == Enum.KeyCode.M then
+-- Перехват клавиши M
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.M then
         if farmingGui then
             farmingGui.Enabled = not farmingGui.Enabled
         else
-            createMenu()
-        end
-    elseif inp.KeyCode == Enum.KeyCode.N then
-        if mobSelectionGui then
-            mobSelectionGui.Enabled = not mobSelectionGui.Enabled
-        else
-            createMobSelectionMenu()
+            createAdvancedMenu()
         end
     end
 end)
-
-task.spawn(function()
-    task.wait(3)
-    pcall(function()
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "Blox Fruits Farm",
-            Text = "Нажми M для меню, N для мобов",
-            Icon = "rbxassetid://6726578090",
-            Duration = 6
-        })
-    end)
-    log("Фарм-меню загружено")
-end)
-function createMobSelectionMenu()
-    if mobSelectionGui then mobSelectionGui:Destroy() end
-
-    mobSelectionGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
-    mobSelectionGui.Name = "MobSelection"
-
-    local frm = Instance.new("Frame", mobSelectionGui)
-    frm.Size = UDim2.new(0, 350, 0, 400)
-    frm.Position = UDim2.new(0.5, -175, 0.5, -200)
-    frm.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-    frm.Active = true
-    frm.Draggable = true
-
-    local title = Instance.new("TextLabel", frm)
-    title.Size = UDim2.new(1, 0, 0, 40)
-    title.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-    title.Text = "⚙️ Выбор мобов (1-3 море)"
-    title.TextColor3 = Color3.fromRGB(0, 255, 255)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 18
-
-    local mobs = {
-        -- Первый мир
-        "Bandit", "Monkey", "Pirate", "Brute", "Desert Bandit", "Desert Officer", "Snow Bandit", "Snowman",
-        "Chief Petty Officer", "Sky Bandit", "Dark Master", "Toga Warrior", "Gladiator",
-        -- Второй мир
-        "Raid Boss", "Swan Pirate", "Factory Staff", "Marine Captain", "Shanda", "God's Guard",
-        -- Третий мир
-        "Pirate Millionaire", "Arctic Warrior", "Snow Lurker", "Island Empress", "Forest Pirate",
-        "Mythological Pirate", "Sea Soldier", "Water Fighter"
-    }
-
-    local toggled = {}
-
-    for i, name in ipairs(mobs) do
-        local y = 40 + i * 35
-        local line = Instance.new("Frame", frm)
-        line.Size = UDim2.new(0.9, 0, 0, 30)
-        line.Position = UDim2.new(0.05, 0, 0, y)
-        line.BackgroundTransparency = 1
-
-        local lbl = Instance.new("TextLabel", line)
-        lbl.Size = UDim2.new(0.7, 0, 1, 0)
-        lbl.Text = name
-        lbl.TextColor3 = Color3.new(1,1,1)
-        lbl.Font = Enum.Font.Gotham
-        lbl.TextSize = 14
-        lbl.BackgroundTransparency = 1
-
-        local btn = Instance.new("TextButton", line)
-        btn.Size = UDim2.new(0.25, 0, 1, 0)
-        btn.Position = UDim2.new(0.75, 0, 0, 0)
-        btn.Text = "ВКЛ"
-        btn.TextColor3 = Color3.new(1,1,1)
-        btn.Font = Enum.Font.GothamBold
-        btn.TextSize = 12
-        btn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-        toggled[name] = true
-
-        btn.MouseButton1Click:Connect(function()
-            toggled[name] = not toggled[name]
-            btn.Text = toggled[name] and "ВКЛ" or "ВЫКЛ"
-            btn.BackgroundColor3 = toggled[name] and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
-        end)
-    end
-
-    local closeBtn = Instance.new("TextButton", frm)
-    closeBtn.Size = UDim2.new(0.9, 0, 0, 35)
-    closeBtn.Position = UDim2.new(0.05, 0, 1, -45)
-    closeBtn.Text = "❌ ЗАКРЫТЬ (N)"
-    closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.TextSize = 14
-    closeBtn.TextColor3 = Color3.new(1,1,1)
-    closeBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-    closeBtn.MouseButton1Click = function()
-        mobSelectionGui:Destroy()
-    end
-end
