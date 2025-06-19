@@ -315,15 +315,13 @@ UserInputService.InputBegan:Connect(function(inp, gpe)
         if farmingGui then
             farmingGui.Enabled = not farmingGui.Enabled
         else
-            -- здесь должен быть вызов: createMenu()
-            log("Открытие GUI временно отключено")
+            createMenu() -- ✅ Фикс: теперь меню открывается!
         end
     elseif inp.KeyCode == Enum.KeyCode.N then
         if mobSelectionGui then
             mobSelectionGui.Enabled = not mobSelectionGui.Enabled
         else
-            -- здесь должен быть вызов: createMobSelectionMenu()
-            log("Открытие меню мобов временно отключено")
+            createMobSelectionMenu() -- ✅ Фикс: теперь меню мобов открывается!
         end
     end
 end)
