@@ -415,3 +415,37 @@ local function startRaids()
 	end
 	log("Авто-рейды отключены")
 end
+-- Добавляем рейды в список включаемых модулей
+farmingModules = {
+    mastery = false,
+    fruits = false,
+    chests = false,
+    bones = false,
+    raids = false -- 🆕 рейды
+}
+
+-- Обновим список функций с рейдами
+local features = {
+    {"ФАРМ МАСТЕРИ", "mastery", startMastery},
+    {"ФРУКТЫ", "fruits", storeFruit},
+    {"СУНДУКИ", "chests", function() log("Нужна реализация") end},
+    {"КОСТИ", "bones", function() log("Нужна реализация") end},
+    {"🔥 РЕЙДЫ", "raids", startRaids} -- 🆕 рейды
+}
+for i, feat in ipairs(features) do
+    local btn = Instance.new("TextButton", frm)
+    btn.Size = UDim2.new(0.9, 0, 0, 35)
+    btn.Position = UDim2.new(0.05, 0, 0, 45 + (i - 1) * 40)
+    btn.BackgroundColor3 = Color3.fromRGB(170, 0, 0) -- красный по умолчанию
+    btn.Text = feat[1] .. " [ВЫКЛ]"
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    btn.TextColor3 = Color3.new(1, 1, 1)
+
+    btn.MouseButton1Click:Connect(function()
+        toggleModule(feat[2], feat[3])
+        local isActive = farmingModules[feat[2]]
+        btn.Text = feat[1] .. (isActive and " [ВКЛ]" or " [ВЫКЛ]")
+        btn.BackgroundColor3 = isActive and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+    end)
+end
