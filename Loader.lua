@@ -14,10 +14,23 @@ local farmingGui, mobSelectionGui
 local farmingModules = {}
 local modulesByKey = {}
 
-local success, _ = pcall(function()
-    PhysicsService:CreateCollisionGroup("NoclipGroup")
+local noclipExists = false
+for _, name in ipairs(PhysicsService:GetCollisionGroups()) do
+    if name.name == "NoclipGroup" then
+        noclipExists = true
+        break
+    end
+end
+
+if not noclipExists then
+    pcall(function()
+        PhysicsService:CreateCollisionGroup("NoclipGroup")
+    end)
+end
+
+pcall(function()
+    PhysicsService:CollisionGroupSetCollidable("NoclipGroup", "Default", false)
 end)
-PhysicsService:CollisionGroupSetCollidable("NoclipGroup", "Default", false)
 
 local function log(msg)
     print("[BF-FARM] " .. msg)
