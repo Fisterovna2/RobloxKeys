@@ -514,3 +514,95 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         end
     end
 end)
+function createMobSelectionMenu()
+    if mobSelectionGui then mobSelectionGui:Destroy() end
+
+    mobSelectionGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
+    mobSelectionGui.Name = "MobSelectionGUI"
+
+    local frame = Instance.new("Frame", mobSelectionGui)
+    frame.Size = UDim2.new(0, 400, 0, 500)
+    frame.Position = UDim2.new(0.5, -200, 0.5, -250)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    frame.Active = true
+    frame.Draggable = true
+
+    local title = Instance.new("TextLabel", frame)
+    title.Size = UDim2.new(1, 0, 0, 40)
+    title.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    title.Text = "📜 Выбор мобов (все моря)"
+    title.TextColor3 = Color3.fromRGB(0, 255, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 18
+
+    local scroll = Instance.new("ScrollingFrame", frame)
+    scroll.Size = UDim2.new(1, -20, 1, -80)
+    scroll.Position = UDim2.new(0, 10, 0, 50)
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scroll.ScrollBarThickness = 8
+    scroll.BackgroundTransparency = 1
+    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scroll.ScrollingDirection = Enum.ScrollingDirection.Y
+
+    local UIListLayout = Instance.new("UIListLayout", scroll)
+    UIListLayout.Padding = UDim.new(0, 5)
+
+    local mobs = {
+        -- 1st Sea
+        "Bandit", "Monkey", "Gorilla", "Pirate", "Brute", "Desert Bandit", "Desert Officer",
+        "Snow Bandit", "Snowman", "Yeti", "Dark Master", "Sky Bandit", "Sky Warrior",
+        "Toga Warrior", "Gladiator", "Military Soldier", "Swan Pirate", "Galley Pirate", "Galley Captain",
+
+        -- 2nd Sea
+        "Raider", "Mercenary", "Swan Pirate", "Marine Captain", "Zombie", "Vampire", "Ghost Ship Pirate",
+        "Ship Engineer", "Factory Staff", "Magma Admiral", "Warden", "Chief Warden",
+
+        -- 3rd Sea
+        "Water Fighter", "Dragon Crew Warrior", "Dragon Crew Archer", "Island Empress Guard",
+        "Forest Pirate", "Sea Soldier", "Fishman Raider", "Pirate Millionaire", "Reborn Skeleton"
+    }
+
+    local toggled = {}
+
+    for _, name in ipairs(mobs) do
+        local line = Instance.new("Frame", scroll)
+        line.Size = UDim2.new(1, 0, 0, 30)
+        line.BackgroundTransparency = 1
+
+        local label = Instance.new("TextLabel", line)
+        label.Size = UDim2.new(0.7, 0, 1, 0)
+        label.Text = name
+        label.TextColor3 = Color3.new(1, 1, 1)
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 14
+        label.BackgroundTransparency = 1
+
+        local toggle = Instance.new("TextButton", line)
+        toggle.Size = UDim2.new(0.25, 0, 1, 0)
+        toggle.Position = UDim2.new(0.75, 0, 0, 0)
+        toggle.Text = "ВКЛ"
+        toggle.TextColor3 = Color3.new(1, 1, 1)
+        toggle.Font = Enum.Font.GothamBold
+        toggle.TextSize = 12
+        toggle.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+        toggled[name] = true
+
+        toggle.MouseButton1Click:Connect(function()
+            toggled[name] = not toggled[name]
+            toggle.Text = toggled[name] and "ВКЛ" or "ВЫКЛ"
+            toggle.BackgroundColor3 = toggled[name] and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+        end)
+    end
+
+    local close = Instance.new("TextButton", frame)
+    close.Size = UDim2.new(0.9, 0, 0, 35)
+    close.Position = UDim2.new(0.05, 0, 1, -40)
+    close.Text = "❌ ЗАКРЫТЬ (N)"
+    close.Font = Enum.Font.GothamBold
+    close.TextSize = 14
+    close.TextColor3 = Color3.new(1,1,1)
+    close.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    close.MouseButton1Click:Connect(function()
+        mobSelectionGui:Destroy()
+    end)
+end
