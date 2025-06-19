@@ -19,11 +19,12 @@ local function log(msg)
     print("[BF-FARM] " .. msg)
 end
 
--- Утилита: noclip
-if not PhysicsService:HasCollisionGroup("NoclipGroup") then
+local success, _ = pcall(function()
     PhysicsService:CreateCollisionGroup("NoclipGroup")
-    PhysicsService:CollisionGroupSetCollidable("NoclipGroup","Default",false)
-end
+end)
+
+-- даже если уже есть — игнорируем ошибку
+PhysicsService:CollisionGroupSetCollidable("NoclipGroup", "Default", false)
 
 local function enableNoclip()
     local char = LocalPlayer.Character
