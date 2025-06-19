@@ -213,7 +213,7 @@ local function serverHop()
     local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/2753915549/servers/Public?sortOrder=Asc&limit=100"))
     for _, v in pairs(servers.data) do
         if v.playing < v.maxPlayers then
-            game:GetService("TeleportService"):TeleportToPlaceInstance(2753915549, v.id, LocalPlayer)
+            game:GetService("TeleportService"):TeleportToPlaceInstance(2753915549, v.id)
             break
         end
     end
