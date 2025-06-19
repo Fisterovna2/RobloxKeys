@@ -19,6 +19,10 @@ local success, _ = pcall(function()
 end)
 PhysicsService:CollisionGroupSetCollidable("NoclipGroup", "Default", false)
 
+local function log(msg)
+    print("[BF-FARM] " .. msg)
+end
+
 local function enableNoclip()
     local char = LocalPlayer.Character
     if not char then return end
@@ -29,6 +33,7 @@ local function enableNoclip()
         end
     end
 end
+
 local function flyTo(pos, yOffset)
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return math.huge end
@@ -111,7 +116,6 @@ local function startMastery()
     end
     log("Фарм мастерки остановлен")
 end
-
 -- Auto Haki (Buso + Ken)
 local function enableHaki()
     local args = { [1] = "Buso" }
@@ -150,7 +154,7 @@ LocalPlayer.Idled:Connect(function()
     vu:Button2Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
 end)
 
--- FPS Boost (отключение лишнего)
+-- FPS Boost
 local function applyFpsBoost()
     settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
     for _, v in pairs(Workspace:GetDescendants()) do
@@ -162,44 +166,42 @@ local function applyFpsBoost()
         end
     end
 end
--- Auto Store Fruit
+
+-- Store Fruit
 local function storeFruit()
     local args = {
         [1] = "StoreFruit",
-        [2] = "FruitName", -- заменишь на актуальное имя фрукта
+        [2] = "FruitName",
         [3] = LocalPlayer.Name
     }
     ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
 end
 
--- Auto Gacha Fruit
+-- Gacha
 local function buyGacha()
     local args = { [1] = "Cousin", [2] = "Buy" }
     ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
 end
 
--- Auto Buy Fruit from Dealer
+-- Buy Fruit
 local function buyFruit(name)
     local args = { [1] = "BuyFruit", [2] = name }
     ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
 end
 
--- Auto Upgrade Stats
+-- Upgrade Stats
 local function upgradeStat(stat)
-    local args = {
-        [1] = "AddPoint",
-        [2] = stat,
-        [3] = 1
-    }
+    local args = { [1] = "AddPoint", [2] = stat, [3] = 1 }
     ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
 end
 
--- Auto Observation Upgrade
+-- Ken Haki Upgrade
 local function upgradeKenHaki()
     local args = { [1] = "UpgradeKenTalk" }
     ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
 end
--- Телепорт к координате
+
+-- Teleport
 local function teleportTo(pos)
     local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if hrp then
@@ -207,12 +209,11 @@ local function teleportTo(pos)
     end
 end
 
--- Сервер-хоп (смена сервера)
+-- Server Hop
 local function serverHop()
     local HttpService = game:GetService("HttpService")
     local response = game:HttpGet("https://games.roblox.com/v1/games/2753915549/servers/Public?sortOrder=Asc&limit=100")
     local servers = HttpService:JSONDecode(response)
-
     for _, v in pairs(servers.data) do
         if v.playing < v.maxPlayers and v.id ~= game.JobId then
             game:GetService("TeleportService"):TeleportToPlaceInstance(2753915549, v.id)
@@ -308,25 +309,23 @@ function createMenu()
     end
 end
 
--- GUI Menu Toggle
 UserInputService.InputBegan:Connect(function(inp, gpe)
     if gpe then return end
     if inp.KeyCode == Enum.KeyCode.M then
         if farmingGui then
             farmingGui.Enabled = not farmingGui.Enabled
         else
-            createMenu() -- ✅ Фикс: теперь меню открывается!
+            createMenu()
         end
     elseif inp.KeyCode == Enum.KeyCode.N then
         if mobSelectionGui then
             mobSelectionGui.Enabled = not mobSelectionGui.Enabled
         else
-            createMobSelectionMenu() -- ✅ Фикс: теперь меню мобов открывается!
+            createMobSelectionMenu()
         end
     end
 end)
 
--- Стартовое уведомление
 task.spawn(function()
     task.wait(3)
     pcall(function()
@@ -339,6 +338,7 @@ task.spawn(function()
     end)
     log("Фарм-меню загружено")
 end)
+
 function createMobSelectionMenu()
     if mobSelectionGui then mobSelectionGui:Destroy() end
 
