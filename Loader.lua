@@ -98,8 +98,12 @@ local function startMastery()
         if enemy then
             local d = flyTo(enemy.HumanoidRootPart.Position)
             if d < 100 then
-                while farmingModules.mastery and enemy and enemy:FindFirstChildOfClass("Humanoid") and enemy.Humanoid.Health > 0 do
-                    attackEnemy(enemy)
+                while farmingModules.mastery and enemy do
+                    if enemy:FindFirstChildOfClass("Humanoid") and enemy.Humanoid.Health > 0 then
+                        attackEnemy(enemy)
+                    else
+                        break
+                    end
                     task.wait(0.2)
                 end
             end
@@ -107,6 +111,7 @@ local function startMastery()
     end
     log("Фарм мастерки остановлен")
 end
+
 -- Auto Haki (Buso + Ken)
 local function enableHaki()
     local args = { [1] = "Buso" }
