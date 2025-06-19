@@ -1,186 +1,992 @@
--- Loader.lua — полный скрипт для Xeno через loadstring(game:HttpGet(...))()
-
 repeat task.wait(1) until game:IsLoaded()
 
+-- Глобальные переменные
+local farmingGui = nil
+local mobSelectionGui = nil
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 local PhysicsService = game:GetService("PhysicsService")
-local StarterGui = game:GetService("StarterGui")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local Workspace = game:GetService("Workspace")
 
--- Ожидание персонажа
-repeat task.wait(1) until LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+-- Ожидаем появления персонажа
+repeat task.wait(1) until LocalPlayer.Character
 
--- Настройка Noclip
-if not pcall(function() PhysicsService:CreateCollisionGroup("NoclipGroup") end) then end
-PhysicsService:CollisionGroupSetCollidable("NoclipGroup", "Default", false)
+-- Инициализация PhysicsService для Noclip
+if not PhysicsService:GetCollisionGroups()[1] then
+    PhysicsService:CreateCollisionGroup("NoclipGroup")
+    PhysicsService:CollisionGroupSetCollidable("NoclipGroup", "Default", false)
+end
 
+-- Состояния фарма
 local farmingModules = {
-    mastery = false,
-    fruits = false,
-    chests = false,
-    bones = false
+    mastery = { enabled = false, thread = nil, toggle = nil, light = nil },
+    fruits = { enabled = false, thread = nil, toggle = nil, light = nil },
+    chests = { enabled = false, thread = nil, toggle = nil, light = nil },
+    bones = { enabled = false, thread = nil, toggle = nil, light = nil }
 }
 
--- Подсказка: меню запускается кнопками M и N
-local function sendNotification()
-    StarterGui:SetCore("SendNotification", {
-        Title = "Фарм-скрипт активирован",
-        Text = "M — меню фарма | N — выбор мобов",
-        Duration = 5
-    })
+-- Настройки выбора мобов
+local mobSelection = {
+    world1 = {
+        ["Bandit"] = true,
+        ["Monkey"] = true,
+        ["Pirate"] = true
+    },
+    world2 = {
+        ["Desert Bandit"] = true,
+        ["Desert Officer"] = true,
+        ["Snow Bandit"] = true,
+        ["Snowman"] = true
+    },
+    world3 = {
+        ["Galley Pirate"] = true,
+        ["Galley Captain"] = true,
+        ["Forest Pirate"] = true
+    }
+}
+
+-- Цвета для визуальной индикации
+local colorThemes = {
+    mastery = { on = Color3.fromRGB(0, 255, 170), off = Color3.fromRGB(100, 100, 100) },
+    fruits = { on = Color3.fromRGB(255, 125, 0), off = Color3.fromRGB(100, 100, 100) },
+    chests = { on = Color3.fromRGB(255, 255, 0), off = Color3.fromRGB(100, 100, 100) },
+    bones = { on = Color3.fromRGB(180, 0, 255), off = Color3.fromRGB(100, 100, 100) }
+}
+
+-- Определение текущего мира
+local function getCurrentWorld()
+    local playerLevel = LocalPlayer.Data.Level.Value
+    if playerLevel < 700 then
+        return "world1"
+    elseif playerLevel < 1500 then
+        return "world2"
+    else
+        return "world3"
+    end
 end
 
-task.defer(sendNotification)
+-- Логирование с меткой времени
+local function log(message)
+    print("[FARM] [" .. os.date("%H:%M:%S") .. "] " .. message)
+end
 
--- Функция Noclip + подлет
+-- Эмуляция кликов мыши
+local function mouse1press()
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, false)
+end
+
+local function mouse1release()
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, false)
+end
+
+-- Анимация переключения
+local function animateToggle(module, key)
+    if module.toggle and module.light then
+        local targetColor = module.enabled and colorThemes[key].on or colorThemes[key].off
+        
+        TweenService:Create(
+            module.toggle,
+            TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            { BackgroundColor3 = targetColor }
+        ):Play()
+        
+        TweenService:Create(
+            module.light,
+            TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            { BackgroundColor3 = targetColor }
+        ):Play()
+        
+        module.toggle.Text = module.enabled and "ВКЛ" or "ВЫКЛ"
+    end
+end
+
+-- Включение Noclip
 local function enableNoclip()
-    local char = LocalPlayer.Character
-    if char then
-        for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                PhysicsService:SetPartCollisionGroup(part, "NoclipGroup")
-                part.CanCollide = false
-            end
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            PhysicsService:SetPartCollisionGroup(part, "NoclipGroup")
+            part.CanCollide = false
         end
     end
 end
 
-local function flyTo(pos, height)
-    local char = LocalPlayer.Character
-    if char and char:FindFirstChild("HumanoidRootPart") then
+-- Функция для полета к цели
+local function flyTo(targetPosition, heightOffset)
+    local character = LocalPlayer.Character
+    if not character then 
+        log("Персонаж не найден для полета")
+        return 9999 
+    end
+    
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then 
+        log("HumanoidRootPart не найден")
+        return 9999 
+    end
+    
+    -- Добавляем смещение по высоте
+    local target = targetPosition + Vector3.new(0, heightOffset or 15, 0)
+    
+    -- Рассчитываем направление
+    local direction = (target - humanoidRootPart.Position).Unit
+    
+    -- Устанавливаем скорость
+    humanoidRootPart.AssemblyLinearVelocity = direction * 150
+    
+    -- Возвращаем расстояние до цели
+    return (target - humanoidRootPart.Position).Magnitude
+end
+
+-- Увеличение хитбокса игрока
+local function enlargePlayerHitbox()
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local hitbox = character:FindFirstChild("BuddhaHitbox")
+    if not hitbox then
+        hitbox = Instance.new("Part")
+        hitbox.Name = "BuddhaHitbox"
+        hitbox.Size = Vector3.new(25, 25, 25)
+        hitbox.Transparency = 1
+        hitbox.CanCollide = false
+        hitbox.Anchored = false
+        hitbox.Parent = character
+        
+        local weld = Instance.new("WeldConstraint")
+        weld.Part0 = character.HumanoidRootPart
+        weld.Part1 = hitbox
+        weld.Parent = hitbox
+        log("Создан увеличенный хитбокс")
+    end
+end
+
+-- Улучшенная функция для атаки врагов
+local function attackEnemy(enemy)
+    if not LocalPlayer.Character or not enemy then 
+        log("Невозможно атаковать: персонаж или враг отсутствует")
+        return 
+    end
+    
+    if not enemy:FindFirstChild("Humanoid") or enemy.Humanoid.Health <= 0 then
+        log("Враг мертв или не имеет Humanoid")
+        return
+    end
+    
+    -- Увеличиваем хитбокс игрока
+    enlargePlayerHitbox()
+    
+    -- Пробуем использовать сначала меч, потом оружие, потом стиль боя
+    local sword = nil
+    local gun = nil
+    
+    -- Проверяем инвентарь
+    for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
+        if tool:IsA("Tool") then
+            if tool.Name:find("Sword") or tool.Name:find("Melee") then
+                sword = tool
+                break
+            elseif tool.Name:find("Gun") or tool.Name:find("Weapon") then
+                gun = tool
+            end
+        end
+    end
+    
+    -- Экипируем оружие при необходимости
+    if sword then
+        sword.Parent = LocalPlayer.Character
+        for i = 1, 3 do
+            sword:Activate()
+            task.wait(0.1)
+        end
+    elseif gun then
+        gun.Parent = LocalPlayer.Character
+        for i = 1, 3 do
+            gun:Activate()
+            task.wait(0.1)
+        end
+    else
+        -- Эмуляция кликов мыши
+        mouse1press()
+        task.wait(0.1)
+        mouse1release()
+    end
+end
+
+-- УЛУЧШЕННАЯ ФУНКЦИЯ ПОИСКА ОБЪЕКТОВ С ОТЛАДКОЙ
+local function findObjects(objectType)
+    local foundObjects = {}
+    local startTime = os.clock()
+    
+    log("Начинаем поиск объектов типа: " .. objectType)
+    
+    -- Динамические пути поиска
+    local searchLocations = {
+        enemies = {
+            Workspace.Enemies,
+            Workspace.Live,
+            Workspace.NPCs,
+            Workspace.Mobs,
+            Workspace["_ENEMIES"],
+            Workspace
+        },
+        fruits = {
+            Workspace.Fruits,
+            Workspace.SpawnedFruits,
+            Workspace.FruitSpawns,
+            Workspace["_FRUITS"],
+            Workspace
+        },
+        chests = {
+            Workspace.Chests,
+            Workspace.Treasures,
+            Workspace.Loot,
+            Workspace["_CHESTS"],
+            Workspace.Islands,
+            Workspace
+        },
+        bones = {
+            Workspace.Bones,
+            Workspace.Items,
+            Workspace.Loot,
+            Workspace["_BONES"],
+            Workspace.Islands,
+            Workspace
+        }
+    }
+    
+    -- Гибкие критерии поиска
+    local searchCriteria = {
+        enemies = function(obj)
+            -- Проверяем что это модель с живым NPC
+            if not obj:IsA("Model") then return false end
+            
+            -- Проверяем наличие Humanoid (любого)
+            local humanoid = obj:FindFirstChildOfClass("Humanoid")
+            if not humanoid or humanoid.Health <= 0 then return false end
+            
+            -- Проверяем наличие какой-либо корневой части
+            local hasRootPart = obj:FindFirstChild("HumanoidRootPart") or 
+                              obj:FindFirstChild("Head") or 
+                              obj:FindFirstChild("Torso") or 
+                              obj.PrimaryPart
+            
+            return hasRootPart ~= nil
+        end,
+        
+        fruits = function(obj)
+            -- Проверяем фрукты по имени и наличию ручки
+            return (obj:IsA("Model") or obj:IsA("MeshPart")) and 
+                   (obj.Name:match("[Ff]ruit") or obj.Name:match("Apple")) and 
+                   obj:FindFirstChild("Handle")
+        end,
+        
+        chests = function(obj)
+            -- Проверяем сундуки по имени и наличию части "Chest"
+            return obj:IsA("Model") and 
+                   (obj.Name:match("[Cc]hest") or obj.Name:match("Treasure")) and 
+                   (obj:FindFirstChild("Chest") or obj:FindFirstChild("Loot"))
+        end,
+        
+        bones = function(obj)
+            -- Проверяем кости по имени и наличию ClickDetector
+            return (obj:IsA("MeshPart") or obj:IsA("Part")) and 
+                   obj.Name:match("[Bb]one") and 
+                   obj:FindFirstChild("ClickDetector")
+        end
+    }
+    
+    local paths = searchLocations[objectType]
+    local criteria = searchCriteria[objectType]
+    
+    if not paths or not criteria then
+        log("ОШИБКА: Неизвестный тип объекта - " .. objectType)
+        return foundObjects
+    end
+    
+    log("Пути поиска для " .. objectType .. ":")
+    local validPaths = {}
+    for _, path in ipairs(paths) do
+        if path then
+            log("  - " .. path:GetFullName())
+            table.insert(validPaths, path)
+        end
+    end
+    
+    -- Расширенный поиск с отладкой
+    for _, location in ipairs(validPaths) do
+        local countBefore = #foundObjects
+        
+        -- Ищем во всех потомках локации
+        for _, obj in ipairs(location:GetDescendants()) do
+            if pcall(function() return criteria(obj) end) then
+                if criteria(obj) then
+                    table.insert(foundObjects, obj)
+                end
+            end
+        end
+        
+        local countFound = #foundObjects - countBefore
+        log("Найдено в '" .. location.Name .. "': " .. countFound)
+    end
+    
+    -- Альтернативный метод для врагов (если ничего не найдено)
+    if objectType == "enemies" and #foundObjects == 0 then
+        log("Пробуем альтернативный поиск врагов...")
+        for _, npc in ipairs(Workspace:GetChildren()) do
+            if npc:IsA("Model") then
+                local humanoid = npc:FindFirstChildOfClass("Humanoid")
+                if humanoid and humanoid.Health > 0 then
+                    table.insert(foundObjects, npc)
+                end
+            end
+        end
+        log("Альтернативный метод нашел: " .. #foundObjects)
+    end
+    
+    log(string.format("Итого найдено объектов типа '%s': %d (за %.3f сек)", objectType, #foundObjects, os.clock() - startTime))
+    return foundObjects
+end
+
+-- Поиск лучшего врага по приоритету (оптимизированный)
+local function findBestEnemy()
+    if not LocalPlayer.Character then 
+        log("Персонаж не найден для поиска врагов")
+        return nil 
+    end
+    
+    local bestEnemy = nil
+    local highestPriority = -math.huge
+    local characterPosition = LocalPlayer.Character.HumanoidRootPart.Position
+    
+    local currentWorld = getCurrentWorld()
+    log("Текущий мир: " .. currentWorld)
+    
+    local enemies = findObjects("enemies")
+    
+    for _, enemy in ipairs(enemies) do
+        local enemyName = enemy.Name
+        
+        -- Проверяем, выбран ли этот тип врага в настройках
+        local isSelected = mobSelection[currentWorld][enemyName]
+        
+        if isSelected then
+            -- Находим корневую часть врага
+            local rootPart = enemy:FindFirstChild("HumanoidRootPart") or 
+                            enemy:FindFirstChild("Head") or 
+                            enemy:FindFirstChild("Torso") or 
+                            enemy.PrimaryPart
+            
+            if not rootPart then
+                -- Если не нашли стандартные части, ищем любую BasePart
+                for _, part in ipairs(enemy:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        rootPart = part
+                        break
+                    end
+                end
+            end
+            
+            if rootPart then
+                -- Рассчитываем приоритет: здоровье + близость
+                local priority = enemy:FindFirstChildOfClass("Humanoid").Health * 0.1
+                local distance = (characterPosition - rootPart.Position).Magnitude
+                priority = priority + (100 / math.max(1, distance))
+                
+                if priority > highestPriority then
+                    highestPriority = priority
+                    bestEnemy = enemy
+                end
+            end
+        end
+    end
+    
+    if bestEnemy then
+        log("Найден враг: " .. bestEnemy.Name)
+    else
+        log("Подходящие враги не найдены")
+    end
+    
+    return bestEnemy
+end
+
+-- Улучшенная функция фарма мастери с добиванием
+local function startMasteryFarm()
+    log("Фарм мастери запущен")
+    while farmingModules.mastery.enabled and task.wait(0.1) do
+        -- Проверка на смерть
+        if not LocalPlayer.Character or LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health <= 0 then
+            log("Персонаж мертв, ожидаем возрождения")
+            task.wait(2)
+            continue
+        end
+        
+        -- Включаем noclip
         enableNoclip()
-        char.HumanoidRootPart.CFrame = CFrame.new(pos + Vector3.new(0, height or 15, 0))
-    end
-end
-
--- Хитбокс и атака
-local function stretchHitbox(enemy)
-    local root = enemy:FindFirstChild("HumanoidRootPart")
-    if root then
-        root.Size = Vector3.new(20, 20, 20)
-        root.CanCollide = false
-    end
-end
-
-local function instantAttack(enemy)
-    local me = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    local target = enemy and enemy:FindFirstChild("HumanoidRootPart")
-    if me and target then
-        firetouchinterest(me, target, 0)
-        firetouchinterest(me, target, 1)
-    end
-end
-
--- Поиск объектов
-local function findObjects()
-    local enemies, chests, fruits, bones = {}, {}, {}, {}
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("Model") and obj:FindFirstChild("Humanoid") and obj:FindFirstChild("HumanoidRootPart") then
-            table.insert(enemies, obj)
-        elseif obj:IsA("Tool") and obj.Parent == Workspace then
-            table.insert(fruits, obj)
-        elseif obj:IsA("ClickDetector") and obj.Parent:IsA("Model") then
-            table.insert(chests, obj.Parent)
-        elseif obj:IsA("MeshPart") and obj.Name:lower():find("bone") then
-            table.insert(bones, obj)
+        
+        -- Поиск лучшего врага по приоритету
+        local bestEnemy = findBestEnemy()
+        
+        if bestEnemy then
+            -- Находим корневую часть врага
+            local rootPart = bestEnemy:FindFirstChild("HumanoidRootPart") or 
+                            bestEnemy:FindFirstChild("Head") or 
+                            bestEnemy:FindFirstChild("Torso") or 
+                            bestEnemy.PrimaryPart
+            
+            if rootPart then
+                -- Летим к врагу и позиционируемся над ним
+                local distance = flyTo(rootPart.Position, 15)
+                
+                -- Атака врага только если мы на безопасном расстоянии
+                if distance < 100 then
+                    -- Добиваем врага до смерти
+                    while bestEnemy and bestEnemy:FindFirstChildOfClass("Humanoid") and bestEnemy:FindFirstChildOfClass("Humanoid").Health > 0 and farmingModules.mastery.enabled do
+                        attackEnemy(bestEnemy)
+                        task.wait(0.1)
+                    end
+                end
+            end
+        else
+            task.wait(1)
         end
     end
-    return enemies, chests, fruits, bones
+    log("Фарм мастери остановлен")
 end
 
--- Поиск Gacha, если нет фруктов
+-- Функция для поиска фруктов (оптимизированная)
+local function findBestFruit()
+    local bestFruit = nil
+    local minDistance = math.huge
+    local character = LocalPlayer.Character
+    if not character then return nil end
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil end
+    
+    local fruits = findObjects("fruits")
+    
+    for _, fruit in ipairs(fruits) do
+        local handle = fruit:FindFirstChild("Handle")
+        if handle then
+            local distance = (rootPart.Position - handle.Position).Magnitude
+            if distance < minDistance then
+                minDistance = distance
+                bestFruit = fruit
+            end
+        end
+    end
+    
+    if bestFruit then
+        log("Найден фрукт: " .. bestFruit.Name)
+    else
+        log("Фрукты не найдены")
+    end
+    
+    return bestFruit
+end
+
+-- Функция для поиска Blox Fruits Gacha
 local function findGacha()
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("Model") and obj.Name:lower():find("gacha") then
-            return obj
+    local npcs = findObjects("enemies")
+    
+    for _, npc in ipairs(npcs) do
+        if npc.Name:find("Blox Fruits Gacha") then
+            log("Найден Gacha: " .. npc.Name)
+            return npc
         end
     end
+    
+    log("Gacha не найден")
+    return nil
 end
 
--- Запуск фарма
-local function farmLoop(type)
-    while farmingModules[type] do
-        local enemies, chests, fruits, bones = findObjects()
-        local char = LocalPlayer.Character
-        if not char or char:FindFirstChild("Humanoid").Health <= 0 then break end
-
-        if type == "mastery" then
-            local best, dist = nil, math.huge
-            for _, e in ipairs(enemies) do
-                local hrp = e:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    local d = (char.HumanoidRootPart.Position - hrp.Position).Magnitude
-                    if d < dist then best, dist = e, d end
-                end
-            end
-            if best then
-                flyTo(best.HumanoidRootPart.Position, 15)
-                stretchHitbox(best)
-                instantAttack(best)
-            end
-        elseif type == "fruits" then
-            if #fruits > 0 then
-                flyTo(fruits[1].Handle.Position, 5)
+-- Функция фарма фруктов
+local function startFruitFarm()
+    log("Фарм фруктов запущен")
+    while farmingModules.fruits.enabled and task.wait(0.1) do
+        -- Проверка на смерть
+        if not LocalPlayer.Character or LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health <= 0 then
+            log("Персонаж мертв, ожидаем возрождения")
+            task.wait(2)
+            continue
+        end
+        
+        -- Включаем noclip
+        enableNoclip()
+        
+        -- Поиск фруктов
+        local bestFruit = findBestFruit()
+        
+        if bestFruit then
+            flyTo(bestFruit.Handle.Position, 5)
+        else
+            -- Если фруктов нет, летим к Gacha для крутки
+            local gacha = findGacha()
+            if gacha then
+                flyTo(gacha.HumanoidRootPart.Position, 5)
             else
-                local g = findGacha()
-                if g and g:FindFirstChild("HumanoidRootPart") then
-                    flyTo(g.HumanoidRootPart.Position, 5)
-                end
-            end
-        elseif type == "chests" then
-            for _, c in ipairs(chests) do
-                local part = c:IsA("BasePart") and c or c:FindFirstChildWhichIsA("BasePart")
-                if part then
-                    flyTo(part.Position, 5)
-                    firetouchinterest(LocalPlayer.Character.HumanoidRootPart, part, 0)
-                    firetouchinterest(LocalPlayer.Character.HumanoidRootPart, part, 1)
-                end
-            end
-        elseif type == "bones" then
-            for _, b in ipairs(bones) do
-                flyTo(b.Position, 5)
-                firetouchinterest(LocalPlayer.Character.HumanoidRootPart, b, 0)
-                firetouchinterest(LocalPlayer.Character.HumanoidRootPart, b, 1)
+                task.wait(1)
             end
         end
-
-        task.wait(0.5)
     end
+    log("Фарм фруктов остановлен")
 end
 
---Создание простого GUI
-local ScreenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
-local frame = Instance.new("Frame", ScreenGui)
-frame.Size = UDim2.new(0,200,0,200)
-frame.Position = UDim2.new(0.5,-100,0.5,-100)
-
-local titles = {"mastery","fruits","chests","bones"}
-for i,type in ipairs(titles) do
-    local btn = Instance.new("TextButton", frame)
-    btn.Text = type:gsub("^%l", string.upper)
-    btn.Size = UDim2.new(1, -10, 0, 40); btn.Position = UDim2.new(0,5, 0, (i-1)*45+5)
-    btn.BackgroundColor3 = Color3.fromRGB(100,100,100)
-    btn.TextColor3 = Color3.new(1,1,1)
-    btn.MouseButton1Click:Connect(function()
-        farmingModules[type] = not farmingModules[type]
-        btn.BackgroundColor3 = farmingModules[type] and Color3.fromRGB(0,255,0) or Color3.fromRGB(100,100,100)
-        if farmingModules[type] then
-            task.spawn(function() farmLoop(type) end)
+-- Функция для поиска сундуков (оптимизированная)
+local function findBestChest()
+    local bestChest = nil
+    local minDistance = math.huge
+    local character = LocalPlayer.Character
+    if not character then return nil end
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil end
+    
+    local chests = findObjects("chests")
+    
+    for _, chest in ipairs(chests) do
+        local chestPart = chest:FindFirstChild("Chest") or chest:FindFirstChild("Loot")
+        if chestPart then
+            local distance = (rootPart.Position - chestPart.Position).Magnitude
+            if distance < minDistance then
+                minDistance = distance
+                bestChest = chestPart
+            end
         end
-    end)
+    end
+    
+    if bestChest then
+        log("Найден сундук: " .. bestChest.Parent.Name)
+    else
+        log("Сундуки не найдены")
+    end
+    
+    return bestChest
 end
 
--- Меню показывается/скрывается по M, выбор мобов пока просто экран (N)
-ScreenGui.Enabled = false
-UserInputService.InputBegan:Connect(function(i)
-    if i.KeyCode == Enum.KeyCode.M then ScreenGui.Enabled = not ScreenGui.Enabled
-    elseif i.KeyCode == Enum.KeyCode.N then
-        StarterGui:SetCore("SendNotification", {
-            Title="Mob Menu", Text="Здесь можно добавить выбор мобов", Duration=3
-        })
+-- Функция фарма сундуков
+local function startChestFarm()
+    log("Фарм сундуков запущен")
+    while farmingModules.chests.enabled and task.wait(0.2) do
+        -- Проверка на смерть
+        if not LocalPlayer.Character or LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health <= 0 then
+            log("Персонаж мертв, ожидаем возрождения")
+            task.wait(2)
+            continue
+        end
+        
+        -- Включаем noclip
+        enableNoclip()
+        
+        -- Поиск сундуков
+        local bestChest = findBestChest()
+        
+        if bestChest then
+            flyTo(bestChest.Position, 5)
+            
+            -- Сбор сундука при близком расстоянии
+            if (LocalPlayer.Character.HumanoidRootPart.Position - bestChest.Position).Magnitude < 10 then
+                firetouchinterest(LocalPlayer.Character.HumanoidRootPart, bestChest, 0)
+                firetouchinterest(LocalPlayer.Character.HumanoidRootPart, bestChest, 1)
+                log("Сундук собран: " .. bestChest.Parent.Name)
+                task.wait(0.5)
+            end
+        else
+            task.wait(1)
+        end
+    end
+    log("Фарм сундуков остановлен")
+end
+
+-- Функция для поиска костей (полностью переработанная)
+local function findBone()
+    local bones = findObjects("bones")
+    
+    if #bones > 0 then
+        local bestBone = bones[1]
+        local minDistance = math.huge
+        local character = LocalPlayer.Character
+        if character then
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                for _, bone in ipairs(bones) do
+                    local distance = (rootPart.Position - bone.Position).Magnitude
+                    if distance < minDistance then
+                        minDistance = distance
+                        bestBone = bone
+                    end
+                end
+            end
+        end
+        log("Найдена кость: " .. bestBone.Name)
+        return bestBone
+    end
+    
+    log("Кости не найдены")
+    return nil
+end
+
+-- Функция фарма костей
+local function startBonesFarm()
+    log("Фарм костей запущен")
+    while farmingModules.bones.enabled and task.wait(0.1) do
+        -- Проверка на смерть
+        if not LocalPlayer.Character or LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health <= 0 then
+            log("Персонаж мертв, ожидаем возрождения")
+            task.wait(2)
+            continue
+        end
+        
+        -- Включаем noclip
+        enableNoclip()
+        
+        -- Поиск костей
+        local bone = findBone()
+        
+        if bone then
+            flyTo(bone.Position, 5)
+            
+            -- Сбор кости при близком расстоянии
+            if (LocalPlayer.Character.HumanoidRootPart.Position - bone.Position).Magnitude < 10 then
+                firetouchinterest(LocalPlayer.Character.HumanoidRootPart, bone, 0)
+                firetouchinterest(LocalPlayer.Character.HumanoidRootPart, bone, 1)
+                log("Кость собрана: " .. bone.Name)
+                task.wait(0.5)
+            end
+        else
+            task.wait(1)
+        end
+    end
+    log("Фарм костей остановлен")
+end
+
+-- Создание меню фарма
+local function createFarmingMenu()
+    if farmingGui then farmingGui:Destroy() end
+    
+    farmingGui = Instance.new("ScreenGui")
+    farmingGui.Name = "FarmingMenuGUI"
+    farmingGui.Parent = game:GetService("CoreGui")
+    farmingGui.ResetOnSpawn = false
+    
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0, 380, 0, 500)
+    mainFrame.Position = UDim2.new(0.5, -190, 0.5, -250)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    mainFrame.BackgroundTransparency = 0.1
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Active = true
+    mainFrame.Draggable = true
+    mainFrame.Parent = farmingGui
+    
+    -- Заголовок
+    local title = Instance.new("TextLabel")
+    title.Text = "BLOCK FRUITS FARM MENU"
+    title.Size = UDim2.new(1, 0, 0, 50)
+    title.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    title.TextColor3 = Color3.fromRGB(0, 255, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 22
+    title.Parent = mainFrame
+    
+    -- Список функций
+    local features = {
+        { name = "ФАРМ МАСТЕРИ", key = "mastery", icon = "🔫" },
+        { name = "ФАРМ ФРУКТОВ", key = "fruits", icon = "🍎" },
+        { name = "ФАРМ СУНДУКОВ", key = "chests", icon = "📦" },
+        { name = "ФАРМ КОСТЕЙ", key = "bones", icon = "💀" }
+    }
+    
+    for i, feature in ipairs(features) do
+        local yPos = 60 + (i-1)*85
+        
+        local container = Instance.new("Frame")
+        container.Size = UDim2.new(0.9, 0, 0, 70)
+        container.Position = UDim2.new(0.05, 0, 0, yPos)
+        container.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+        container.BackgroundTransparency = 0.3
+        container.Parent = mainFrame
+        
+        local iconLabel = Instance.new("TextLabel")
+        iconLabel.Text = feature.icon
+        iconLabel.Size = UDim2.new(0, 50, 0, 50)
+        iconLabel.Position = UDim2.new(0.05, 0, 0.15, 0)
+        iconLabel.TextSize = 30
+        iconLabel.BackgroundTransparency = 1
+        iconLabel.TextColor3 = colorThemes[feature.key].off
+        iconLabel.Parent = container
+        
+        local label = Instance.new("TextLabel")
+        label.Text = feature.name
+        label.Size = UDim2.new(0.5, 0, 1, 0)
+        label.Position = UDim2.new(0.2, 0, 0, 0)
+        label.TextColor3 = Color3.new(1, 1, 1)
+        label.Font = Enum.Font.GothamBold
+        label.TextSize = 16
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.BackgroundTransparency = 1
+        label.Parent = container
+        
+        local toggleFrame = Instance.new("Frame")
+        toggleFrame.Size = UDim2.new(0, 80, 0, 30)
+        toggleFrame.Position = UDim2.new(0.7, 0, 0.3, 0)
+        toggleFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+        toggleFrame.Parent = container
+        
+        local light = Instance.new("Frame")
+        light.Size = UDim2.new(0, 12, 0, 12)
+        light.Position = UDim2.new(0.1, 0, 0.3, 0)
+        light.BackgroundColor3 = colorThemes[feature.key].off
+        light.ZIndex = 2
+        light.Parent = toggleFrame
+        
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(1, 0)
+        corner.Parent = light
+        
+        local statusText = Instance.new("TextLabel")
+        statusText.Size = UDim2.new(0.6, 0, 1, 0)
+        statusText.Position = UDim2.new(0.3, 0, 0, 0)
+        statusText.Text = "ВЫКЛ"
+        statusText.TextColor3 = Color3.new(0.8, 0.8, 0.8)
+        statusText.Font = Enum.Font.GothamBold
+        statusText.TextSize = 14
+        statusText.BackgroundTransparency = 1
+        statusText.Parent = toggleFrame
+        
+        farmingModules[feature.key].toggle = statusText
+        farmingModules[feature.key].light = light
+        animateToggle(farmingModules[feature.key], feature.key)
+        
+        local clickArea = Instance.new("TextButton")
+        clickArea.Size = UDim2.new(1, 0, 1, 0)
+        clickArea.BackgroundTransparency = 1
+        clickArea.Text = ""
+        clickArea.ZIndex = 5
+        clickArea.Parent = toggleFrame
+        
+        clickArea.MouseButton1Click:Connect(function()
+            -- Выключаем все другие модули
+            for key, module in pairs(farmingModules) do
+                if key ~= feature.key and module.enabled then
+                    module.enabled = false
+                    animateToggle(module, key)
+                    if module.thread then
+                        task.cancel(module.thread)
+                        module.thread = nil
+                    end
+                end
+            end
+            
+            -- Включаем/выключаем текущий модуль
+            farmingModules[feature.key].enabled = not farmingModules[feature.key].enabled
+            animateToggle(farmingModules[feature.key], feature.key)
+            
+            if farmingModules[feature.key].enabled then
+                if feature.key == "mastery" then
+                    farmingModules.mastery.thread = task.spawn(startMasteryFarm)
+                elseif feature.key == "fruits" then
+                    farmingModules.fruits.thread = task.spawn(startFruitFarm)
+                elseif feature.key == "chests" then
+                    farmingModules.chests.thread = task.spawn(startChestFarm)
+                elseif feature.key == "bones" then
+                    farmingModules.bones.thread = task.spawn(startBonesFarm)
+                end
+            else
+                if farmingModules[feature.key].thread then
+                    task.cancel(farmingModules[feature.key].thread)
+                    farmingModules[feature.key].thread = nil
+                end
+            end
+        end)
+    end
+    
+    -- Кнопка выбора мобов
+    local mobsBtn = Instance.new("TextButton")
+    mobsBtn.Text = "ВЫБОР МОБОВ (N)"
+    mobsBtn.Size = UDim2.new(0.9, 0, 0, 40)
+    mobsBtn.Position = UDim2.new(0.05, 0, 0, 440)
+    mobsBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 180)
+    mobsBtn.TextColor3 = Color3.new(1, 1, 1)
+    mobsBtn.Font = Enum.Font.GothamBold
+    mobsBtn.TextSize = 16
+    mobsBtn.Parent = mainFrame
+    
+    mobsBtn.MouseButton1Click:Connect(function()
+        createMobSelectionMenu()
+    end)
+    
+    -- Кнопка закрытия
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Text = "ЗАКРЫТЬ МЕНЮ"
+    closeBtn.Size = UDim2.new(0.9, 0, 0, 40)
+    closeBtn.Position = UDim2.new(0.05, 0, 0, 490)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    closeBtn.TextColor3 = Color3.new(1, 1, 1)
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 16
+    closeBtn.Parent = mainFrame
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        farmingGui:Destroy()
+        farmingGui = nil
+    end)
+    
+    -- Скругление углов
+    local mainCorner = Instance.new("UICorner")
+    mainCorner.CornerRadius = UDim.new(0, 12)
+    mainCorner.Parent = mainFrame
+    
+    return farmingGui
+end
+
+-- Создание меню выбора мобов
+local function createMobSelectionMenu()
+    if mobSelectionGui then mobSelectionGui:Destroy() end
+    
+    mobSelectionGui = Instance.new("ScreenGui")
+    mobSelectionGui.Name = "MobSelectionGUI"
+    mobSelectionGui.Parent = game:GetService("CoreGui")
+    mobSelectionGui.ResetOnSpawn = false
+    
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0, 380, 0, 500)
+    mainFrame.Position = UDim2.new(0.5, -190, 0.5, -250)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    mainFrame.Active = true
+    mainFrame.Draggable = true
+    mainFrame.Parent = mobSelectionGui
+    
+    local title = Instance.new("TextLabel")
+    title.Text = "ВЫБОР МОБОВ"
+    title.Size = UDim2.new(1, 0, 0, 50)
+    title.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    title.TextColor3 = Color3.fromRGB(0, 255, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 22
+    title.Parent = mainFrame
+    
+    local worlds = {
+        { name = "МИР 1", key = "world1" },
+        { name = "МИР 2", key = "world2" },
+        { name = "МИР 3", key = "world3" }
+    }
+    
+    local yOffset = 60
+    for _, world in ipairs(worlds) do
+        local worldTitle = Instance.new("TextLabel")
+        worldTitle.Text = world.name
+        worldTitle.Size = UDim2.new(0.9, 0, 0, 30)
+        worldTitle.Position = UDim2.new(0.05, 0, 0, yOffset)
+        worldTitle.TextColor3 = Color3.fromRGB(0, 200, 255)
+        worldTitle.Font = Enum.Font.GothamBold
+        worldTitle.TextSize = 16
+        worldTitle.BackgroundTransparency = 1
+        worldTitle.TextXAlignment = Enum.TextXAlignment.Left
+        worldTitle.Parent = mainFrame
+        
+        yOffset = yOffset + 35
+        
+        for mobName, selected in pairs(mobSelection[world.key]) do
+            local mobFrame = Instance.new("Frame")
+            mobFrame.Size = UDim2.new(0.9, 0, 0, 30)
+            mobFrame.Position = UDim2.new(0.05, 0, 0, yOffset)
+            mobFrame.BackgroundTransparency = 1
+            mobFrame.Parent = mainFrame
+            
+            local mobLabel = Instance.new("TextLabel")
+            mobLabel.Text = mobName
+            mobLabel.Size = UDim2.new(0.7, 0, 1, 0)
+            mobLabel.Position = UDim2.new(0, 0, 0, 0)
+            mobLabel.TextColor3 = Color3.new(1, 1, 1)
+            mobLabel.Font = Enum.Font.Gotham
+            mobLabel.TextSize = 14
+            mobLabel.BackgroundTransparency = 1
+            mobLabel.TextXAlignment = Enum.TextXAlignment.Left
+            mobLabel.Parent = mobFrame
+            
+            local mobToggle = Instance.new("TextButton")
+            mobToggle.Size = UDim2.new(0.25, 0, 1, 0)
+            mobToggle.Position = UDim2.new(0.75, 0, 0, 0)
+            mobToggle.BackgroundColor3 = selected and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+            mobToggle.Text = selected and "ВКЛ" or "ВЫКЛ"
+            mobToggle.TextColor3 = Color3.new(1, 1, 1)
+            mobToggle.Font = Enum.Font.GothamBold
+            mobToggle.TextSize = 12
+            mobToggle.Parent = mobFrame
+            
+            mobToggle.MouseButton1Click:Connect(function()
+                local newState = not mobSelection[world.key][mobName]
+                mobSelection[world.key][mobName] = newState
+                
+                if newState then
+                    mobToggle.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+                    mobToggle.Text = "ВКЛ"
+                else
+                    mobToggle.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+                    mobToggle.Text = "ВЫКЛ"
+                end
+            end)
+            
+            yOffset = yOffset + 35
+        end
+        yOffset = yOffset + 15
+    end
+    
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Text = "ЗАКРЫТЬ (N)"
+    closeBtn.Size = UDim2.new(0.9, 0, 0, 40)
+    closeBtn.Position = UDim2.new(0.05, 0, 0, yOffset + 10)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    closeBtn.TextColor3 = Color3.new(1, 1, 1)
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 16
+    closeBtn.Parent = mainFrame
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        mobSelectionGui:Destroy()
+        mobSelectionGui = nil
+    end)
+    
+    local mainCorner = Instance.new("UICorner")
+    mainCorner.CornerRadius = UDim.new(0, 12)
+    mainCorner.Parent = mainFrame
+    
+    return mobSelectionGui
+end
+
+-- Обработчики клавиш
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.M then
+        if farmingGui and farmingGui.Enabled then
+            farmingGui.Enabled = false
+        else
+            createFarmingMenu()
+        end
+    elseif input.KeyCode == Enum.KeyCode.N then
+        if mobSelectionGui and mobSelectionGui.Enabled then
+            mobSelectionGui.Enabled = false
+        else
+            createMobSelectionMenu()
+        end
     end
 end)
 
-print("Фарм-скрипт загружен!")
+-- Уведомление
+task.spawn(function()
+    task.wait(3)
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "ФАРМ МЕНЮ АКТИВИРОВАН",
+        Text = "M: Меню фарма\nN: Выбор мобов",
+        Icon = "rbxassetid://6726578090",
+        Duration = 10
+    })
+    log("Фарм-меню готово! Нажмите M для открытия.")
+end)
+
+log("Фарм-скрипт успешно загружен!")
