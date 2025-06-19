@@ -56,7 +56,6 @@ local function flyTo(pos, yOffset)
     root.AssemblyLinearVelocity = dir * 150
     return (target - root.Position).Magnitude
 end
-
 local function attackEnemy(enemy)
     local bp = LocalPlayer.Backpack
     local char = LocalPlayer.Character
@@ -96,7 +95,9 @@ end
 
 local function getNearestEnemy()
     local nearest, minDist = nil, 1e9
-    local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+    local myPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myPos then return nil end
+    myPos = myPos.Position
     for _, mob in ipairs(findEnemies()) do
         local dist = (mob.HumanoidRootPart.Position - myPos).Magnitude
         if dist < minDist then
@@ -106,7 +107,6 @@ local function getNearestEnemy()
     end
     return nearest
 end
-
 local function startMastery()
     log("Фарм мастерки запущен")
     while farmingModules.mastery do
@@ -129,7 +129,7 @@ local function startMastery()
     end
     log("Фарм мастерки остановлен")
 end
--- Auto Haki (Buso + Ken)
+
 local function enableHaki()
     local args = { [1] = "Buso" }
     ReplicatedStorage.Remotes.Comm:InvokeServer(unpack(args))
@@ -138,7 +138,6 @@ local function enableHaki()
     ReplicatedStorage.Remotes.Comm:InvokeServer(unpack(args2))
 end
 
--- Auto Equip Best Weapon
 local function autoEquip()
     local backpack = LocalPlayer.Backpack
     for _, tool in ipairs(backpack:GetChildren()) do
@@ -149,7 +148,6 @@ local function autoEquip()
     end
 end
 
--- Auto Respawn
 LocalPlayer.CharacterAdded:Connect(function(char)
     task.wait(1)
     if farmingModules.mastery then
@@ -159,15 +157,12 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     end
 end)
 
--- Anti-AFK
 local vu = game:GetService("VirtualUser")
 LocalPlayer.Idled:Connect(function()
     vu:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
     task.wait(1)
     vu:Button2Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
 end)
-
--- FPS Boost
 local function applyFpsBoost()
     settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
     for _, v in pairs(Workspace:GetDescendants()) do
@@ -180,7 +175,6 @@ local function applyFpsBoost()
     end
 end
 
--- Store Fruit
 local function storeFruit()
     local args = {
         [1] = "StoreFruit",
@@ -190,31 +184,26 @@ local function storeFruit()
     ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
 end
 
--- Gacha
 local function buyGacha()
     local args = { [1] = "Cousin", [2] = "Buy" }
     ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
 end
 
--- Buy Fruit
 local function buyFruit(name)
     local args = { [1] = "BuyFruit", [2] = name }
     ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
 end
 
--- Upgrade Stats
 local function upgradeStat(stat)
     local args = { [1] = "AddPoint", [2] = stat, [3] = 1 }
     ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
 end
 
--- Ken Haki Upgrade
 local function upgradeKenHaki()
     local args = { [1] = "UpgradeKenTalk" }
     ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
 end
 
--- Teleport
 local function teleportTo(pos)
     local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if hrp then
@@ -222,7 +211,6 @@ local function teleportTo(pos)
     end
 end
 
--- Server Hop
 local function serverHop()
     local HttpService = game:GetService("HttpService")
     local response = game:HttpGet("https://games.roblox.com/v1/games/2753915549/servers/Public?sortOrder=Asc&limit=100")
@@ -241,8 +229,12 @@ farmingModules = {
     bones = false,
 }
 
-local function toggleModule(name, func)
+local function toggleModule(name, func, button)
     farmingModules[name] = not farmingModules[name]
+    if button then
+        button.Text = farmingModules[name] and "ОТКЛ" or "ВКЛ"
+        button.BackgroundColor3 = farmingModules[name] and Color3.fromRGB(180, 50, 50) or Color3.fromRGB(0, 170, 0)
+    end
     if farmingModules[name] then
         log("Включен: " .. name)
         task.spawn(func)
@@ -282,16 +274,24 @@ function createMenu()
         local btn = Instance.new("TextButton", frm)
         btn.Size = UDim2.new(0.9, 0, 0, 35)
         btn.Position = UDim2.new(0.05, 0, 0, 45 + (i-1)*40)
-        btn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-        btn.Text = feat[1]
+        btn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+        btn.Text = "ВКЛ"
         btn.Font = Enum.Font.GothamBold
         btn.TextSize = 14
         btn.TextColor3 = Color3.new(1, 1, 1)
         btn.MouseButton1Click:Connect(function()
-            toggleModule(feat[2], feat[3])
+            toggleModule(feat[2], feat[3], btn)
         end)
-    end
 
+        local lbl = Instance.new("TextLabel", btn)
+        lbl.Size = UDim2.new(1, 0, 1, 0)
+        lbl.Position = UDim2.new(0, 0, 0, 0)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = feat[1]
+        lbl.Font = Enum.Font.GothamBold
+        lbl.TextSize = 14
+        lbl.TextColor3 = Color3.new(1, 1, 1)
+    end
     local mobBtn = Instance.new("TextButton", frm)
     mobBtn.Size = UDim2.new(0.9, 0, 0, 35)
     mobBtn.Position = UDim2.new(0.05, 0, 1, -80)
@@ -351,7 +351,6 @@ task.spawn(function()
     end)
     log("Фарм-меню загружено")
 end)
-
 function createMobSelectionMenu()
     if mobSelectionGui then mobSelectionGui:Destroy() end
 
@@ -368,12 +367,22 @@ function createMobSelectionMenu()
     local title = Instance.new("TextLabel", frm)
     title.Size = UDim2.new(1, 0, 0, 40)
     title.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-    title.Text = "⚙️ Выбор мобов (пример)"
+    title.Text = "⚙️ Выбор мобов (1-3 море)"
     title.TextColor3 = Color3.fromRGB(0, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 18
 
-    local mobs = {"Bandit", "Monkey", "Pirate", "Brute", "Desert Bandit", "Galley Pirate"}
+    local mobs = {
+        -- Первый мир
+        "Bandit", "Monkey", "Pirate", "Brute", "Desert Bandit", "Desert Officer", "Snow Bandit", "Snowman",
+        "Chief Petty Officer", "Sky Bandit", "Dark Master", "Toga Warrior", "Gladiator",
+        -- Второй мир
+        "Raid Boss", "Swan Pirate", "Factory Staff", "Marine Captain", "Shanda", "God's Guard",
+        -- Третий мир
+        "Pirate Millionaire", "Arctic Warrior", "Snow Lurker", "Island Empress", "Forest Pirate",
+        "Mythological Pirate", "Sea Soldier", "Water Fighter"
+    }
+
     local toggled = {}
 
     for i, name in ipairs(mobs) do
