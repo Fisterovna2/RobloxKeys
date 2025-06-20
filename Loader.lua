@@ -1,4 +1,4 @@
--- [1] Ожидание загрузки игры
+-- [1] Ожидание полной загрузки игры
 repeat task.wait() until game:IsLoaded()
 
 -- [2] Сервисы
@@ -10,13 +10,13 @@ local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 local PhysicsService = game:GetService("PhysicsService")
 local Workspace = game:GetService("Workspace")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 -- [3] Локальные переменные
 local LocalPlayer = Players.LocalPlayer
 local Modules = {}
 local BloxHubGui
 local mobSelectionGui
-local toggledMobs = {}
 local farmingModules = {
 	mastery = false,
 	fruits = false,
@@ -24,8 +24,9 @@ local farmingModules = {
 	bones = false,
 	raids = false
 }
+local toggledMobs = {}
 
--- [4] Логирование
+-- [4] Утилита логирования
 local function log(msg)
 	print("[BLOX-HUB] " .. tostring(msg))
 end
@@ -50,7 +51,6 @@ local function teleportTo(pos)
 		hrp.CFrame = CFrame.new(pos + Vector3.new(0, 5, 0))
 	end
 end
-
 -- [7] Авто прокачка статов
 local function upgradeStat(stat)
 	local args = { [1] = "AddPoint", [2] = stat, [3] = 1 }
@@ -61,13 +61,13 @@ end
 local function storeFruit()
 	local args = {
 		[1] = "StoreFruit",
-		[2] = "FruitName",
+		[2] = "FruitName", -- тут можно заменить на нужный фрукт
 		[3] = LocalPlayer.Name
 	}
 	ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
 end
 
--- [9] Start Mastery
+-- [9] Start Mastery (обновлено)
 local function startMastery()
 	log("Фарм мастерки запущен")
 	while farmingModules.mastery do
@@ -77,14 +77,20 @@ local function startMastery()
 			if m:IsA("Model") and m:FindFirstChildOfClass("Humanoid") and m:FindFirstChild("HumanoidRootPart") then
 				if toggledMobs[m.Name] and m:FindFirstChildOfClass("Humanoid").Health > 0 then
 					teleportTo(m.HumanoidRootPart.Position)
-					task.wait(0.5)
+					task.wait(0.4)
+					for i = 1, 3 do
+						VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,false)
+						task.wait(0.05)
+						VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,false)
+					end
 				end
 			end
 		end
 	end
 	log("Фарм мастерки остановлен")
 end
--- [10] Удаление старого GUI
+
+-- [10] Очистка старого GUI
 pcall(function()
 	if CoreGui:FindFirstChild("BloxHubGui") then
 		CoreGui.BloxHubGui:Destroy()
@@ -105,7 +111,6 @@ mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Draggable = true
-
 -- [13] Навигационная панель
 local navFrame = Instance.new("Frame", mainFrame)
 navFrame.Name = "NavPanel"
@@ -120,7 +125,7 @@ navLabel.Font = Enum.Font.GothamBold
 navLabel.TextSize = 16
 navLabel.TextColor3 = Color3.fromRGB(0, 255, 255)
 
--- [14] Вкладки
+-- [14] Описание вкладок
 local tabs = {
 	{ Name = "Main", Text = "Главное" },
 	{ Name = "Sea", Text = "Моря" },
@@ -133,14 +138,14 @@ local tabButtons = {}
 local createdTabs = {}
 local selectedTab
 
--- [15] Контейнер вкладок
+-- [15] Контейнер для вкладок
 local tabContainer = Instance.new("Frame", mainFrame)
 tabContainer.Name = "TabContainer"
 tabContainer.Position = UDim2.new(0, 150, 0, 0)
 tabContainer.Size = UDim2.new(1, -150, 1, 0)
 tabContainer.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
 
--- [16] Скрытие всех вкладок
+-- [16] Функция скрытия всех вкладок
 local function hideAllTabs()
 	for _, tab in pairs(tabContainer:GetChildren()) do
 		if tab:IsA("Frame") then
@@ -149,7 +154,7 @@ local function hideAllTabs()
 	end
 end
 
--- [17] Создание вкладки
+-- [17] Функция создания вкладки
 local function createTab(name)
 	if createdTabs[name] then return createdTabs[name] end
 	local tab = Instance.new("Frame", tabContainer)
@@ -160,8 +165,7 @@ local function createTab(name)
 	createdTabs[name] = tab
 	return tab
 end
-
--- [18] Кнопки навигации
+-- [18] Создание кнопок навигации
 for i, tab in ipairs(tabs) do
 	local btn = Instance.new("TextButton", navFrame)
 	btn.Size = UDim2.new(1, 0, 0, 35)
@@ -184,6 +188,7 @@ end
 -- [19] Сделать первую вкладку активной
 task.wait(0.2)
 tabButtons["Main"]:MouseButton1Click()
+
 -- [20] Вкладка Main — переключатели функций
 local mainTab = createTab("Main")
 mainTab.Visible = true
@@ -221,7 +226,7 @@ for i, item in ipairs(toggleData) do
 				if item.Key == "mastery" then startMastery() end
 				if item.Key == "fruits" then storeFruit() end
 				if item.Key == "raids" then startRaids() end
-				-- остальные функции пока не реализованы
+				-- остальные функции можно добавить тут
 			end)
 		end
 	end)
@@ -292,16 +297,16 @@ end
 -- [24] Вкладка Visual — FPS Boost
 local visualTab = createTab("Visual")
 local btn = Instance.new("TextButton", visualTab)
-btn.Size = UDim2.new(0, 200, 0, 35)
-btn.Position = UDim2.new(0, 20, 0, 30)
-btn.BackgroundColor3 = Color3.fromRGB(100, 60, 80)
-btn.Text = "⚙️ Включить FPS Boost"
-btn.Font = Enum.Font.GothamBold
-btn.TextSize = 14
-btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-btn.MouseButton1Click:Connect(function()
-	applyFpsBoost()
-end)
+	btn.Size = UDim2.new(0, 200, 0, 35)
+	btn.Position = UDim2.new(0, 20, 0, 30)
+	btn.BackgroundColor3 = Color3.fromRGB(100, 60, 80)
+	btn.Text = "⚙️ Включить FPS Boost"
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 14
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.MouseButton1Click:Connect(function()
+		applyFpsBoost()
+	end)
 -- [25] Вкладка выбора мобов (по клавише N)
 function createMobSelectionMenu()
 	if mobSelectionGui then mobSelectionGui:Destroy() end
@@ -326,7 +331,7 @@ function createMobSelectionMenu()
 
 	-- Прокручиваемый список
 	local scroll = Instance.new("ScrollingFrame", frm)
-	scroll.Size = UDim2.new(1, -20, 1, -80)
+	scroll.Size = UDim2.new(1, -20,
 	scroll.Position = UDim2.new(0, 10, 0, 50)
 	scroll.CanvasSize = UDim2.new(0, 0, 0, 1500)
 	scroll.ScrollBarThickness = 8
@@ -347,9 +352,6 @@ function createMobSelectionMenu()
 		"Arctic Warrior", "Island Empress", "Reborn Skeleton", "Water Fighter", "Fishman Raider",
 		"Fishman Captain", "Sea Soldier", "Mythological Pirate", "Dragon Crew Warrior", "Elite Pirate"
 	}
-
-	local toggledMobs = {}
-
 	for _, mobName in ipairs(mobList) do
 		local row = Instance.new("Frame", scroll)
 		row.Size = UDim2.new(1, -10, 0, 30)
@@ -392,7 +394,6 @@ function createMobSelectionMenu()
 		mobSelectionGui:Destroy()
 	end
 end
-
 -- [26] Назначение клавиш M и N
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
