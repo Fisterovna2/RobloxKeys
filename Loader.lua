@@ -422,3 +422,111 @@ task.spawn(function()
 	end)
 	log("GUI успешно запущен.")
 end)
+-- [28] Реализация авто-рейдов
+local function startRaids()
+	log("Авто-рейды активированы")
+	while farmingModules.raids do
+		task.wait(3)
+
+		local raidTable = Workspace:FindFirstChild("RaidSummon")
+		local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+		if raidTable and hrp then
+			teleportTo(raidTable.Position + Vector3.new(0, 5, 0))
+			task.wait(1)
+
+			local raidType = "Flame"  -- можно позже сделать выбор в GUI
+			log("Выбор рейда: " .. raidType)
+
+			local args = {
+				[1] = "RaidsNpc",
+				[2] = "Select",
+				[3] = raidType
+			}
+			ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
+			task.wait(0.5)
+
+			local startArgs = {
+				[1] = "RaidsNpc",
+				[2] = "Start"
+			}
+			ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(startArgs))
+
+			log("Рейд запущен. Ожидаем завершения...")
+
+			repeat
+				task.wait(5)
+			until not farmingModules.raids or not Workspace:FindFirstChild("Enemies")
+
+			log("Рейд завершён или остановлен.")
+			task.wait(10)
+		else
+			log("⚠️ Стол рейдов не найден или персонаж не готов")
+			task.wait(5)
+		end
+	end
+	log("Авто-рейды остановлены")
+end
+-- [29] Добавляем рейды в список включаемых функций
+local features = {
+	{"ФАРМ МАСТЕРИ", "mastery", startMastery},
+	{"ФРУКТЫ", "fruits", storeFruit},
+	{"СУНДУКИ", "chests", function() log("Фарм сундуков не реализован") end},
+	{"КОСТИ", "bones", function() log("Фарм костей не реализован") end},
+	{"🔥 РЕЙДЫ", "raids", startRaids}
+}
+
+for i, feat in ipairs(features) do
+	local btn = Instance.new("TextButton", mainTab)
+	btn.Size = UDim2.new(0, 240, 0, 35)
+	btn.Position = UDim2.new(0, 20, 0, 260 + (i - 1) * 40)
+	btn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+	btn.Text = feat[1] .. " [ВЫКЛ]"
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 14
+	btn.TextColor3 = Color3.new(1, 1, 1)
+
+	btn.MouseButton1Click:Connect(function()
+		local key = feat[2]
+		farmingModules[key] = not farmingModules[key]
+		local isActive = farmingModules[key]
+		btn.Text = feat[1] .. (isActive and " [ВКЛ]" or " [ВЫКЛ]")
+		btn.BackgroundColor3 = isActive and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+
+		if isActive and feat[3] then
+			task.spawn(function()
+				feat[3]()
+			end)
+		end
+	end)
+end
+-- [30] Обработка клавиш M и N (GUI открытие/закрытие)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.M then
+		if BloxHubGui and BloxHubGui:FindFirstChild("MainFrame") then
+			BloxHubGui.MainFrame.Visible = not BloxHubGui.MainFrame.Visible
+		end
+	elseif input.KeyCode == Enum.KeyCode.N then
+		if mobSelectionGui and mobSelectionGui.Parent then
+			mobSelectionGui.Enabled = not mobSelectionGui.Enabled
+		else
+			createMobSelectionMenu()
+		end
+	end
+end)
+
+-- [31] Уведомление при запуске GUI
+task.spawn(function()
+	task.wait(2)
+	pcall(function()
+		game.StarterGui:SetCore("SendNotification", {
+			Title = "✅ Blox Fruits GUI",
+			Text = "Нажмите M — Меню, N — Мобы",
+			Duration = 5,
+			Icon = "rbxassetid://6726578090"
+		})
+	end)
+	log("GUI инициализирован и готов к использованию.")
+end)
